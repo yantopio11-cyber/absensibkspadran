@@ -1,0 +1,6 @@
+{
+  "name": "ABSENSI DIGITAL SMP NEGERI 2 PACIRAN",
+  "description": "Aplikasi Absensi Digital SMP Negeri 2 Paciran dengan fitur Kelola Kelas, Input Absensi Harian, Rekapitulasi Kalender Bulanan (Jumat Libur), dan Ekspor/Sinkronisasi Spreadsheet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

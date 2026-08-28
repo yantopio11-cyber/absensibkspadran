@@ -1,0 +1,1069 @@
+import React, { useState } from 'react';
+import { SchoolSettings, Student, AttendanceRecord } from '../types';
+import { DEFAULT_SETTINGS, DEFAULT_GOOGLE_SHEET_STUDENT_URL, sendAttendanceToGoogleSheets } from '../utils/storage';
+import {
+  Settings,
+  School,
+  Database,
+  Link,
+  Code,
+  Download,
+  Upload,
+  CheckCircle,
+  Copy,
+  Trash2,
+  RefreshCw,
+  Sparkles,
+  ExternalLink,
+  Globe,
+  AlertCircle,
+  Info,
+} from 'lucide-react';
+
+interface PengaturanTabProps {
+  settings: SchoolSettings;
+  onSaveSettings: (newSettings: SchoolSettings) => void;
+  students: Student[];
+  attendanceRecords: AttendanceRecord[];
+  onRestoreAllData: (students: Student[], attendance: AttendanceRecord[], settings: SchoolSettings) => void;
+  onClearAttendanceOnly: () => void;
+  onClearAll: () => void;
+  onSyncGoogleSheet?: (customUrl?: string, showToast?: boolean) => Promise<{ success: boolean; count: number; classes: string[] }>;
+  isSyncingSheet?: boolean;
+}
+
+export const PengaturanTab: React.FC<PengaturanTabProps> = ({
+  settings,
+  onSaveSettings,
+  students,
+  attendanceRecords,
+  onRestoreAllData,
+  onClearAttendanceOnly,
+  onClearAll,
+  onSyncGoogleSheet,
+  isSyncingSheet = false,
+}) => {
+  const [formData, setFormData] = useState<SchoolSettings>({ ...settings });
+  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [testResult, setTestResult] = useState<{ loading: boolean; msg: string; success?: boolean } | null>(null);
+  const [sheetSyncResult, setSheetSyncResult] = useState<{ loading: boolean; msg: string; success?: boolean } | null>(null);
+
+  React.useEffect(() => {
+    setFormData({ ...settings });
+  }, [settings]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSaveSettings(formData);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const handleResetToDefault = () => {
+    if (window.confirm('Kembalikan profil sekolah ke setelan awal SMP Negeri 2 Paciran?')) {
+      setFormData(DEFAULT_SETTINGS);
+      onSaveSettings(DEFAULT_SETTINGS);
+    }
+  };
+
+  const handleManualSyncStudents = async () => {
+    if (!onSyncGoogleSheet) return;
+    setSheetSyncResult({ loading: true, msg: 'Sedang mengunduh dan membaca data siswa dari Google Sheets...' });
+    const res = await onSyncGoogleSheet(formData.googleSheetStudentUrl, false);
+    if (res.success) {
+      setSheetSyncResult({
+        loading: false,
+        msg: `Berhasil menyinkronkan ${res.count} siswa dari ${res.classes.length} kelas (${res.classes.join(', ')}).`,
+        success: true,
+      });
+    } else {
+      setSheetSyncResult({
+        loading: false,
+        msg: 'Gagal mengambil data dari Google Sheets. Pastikan URL benar dan sheet telah dipublikasikan sebagai CSV.',
+        success: false,
+      });
+    }
+  };
+
+  // Google Apps Script code generator
+  const appsScriptCode = `function doPost(e) {
+  return handleAllRequests(e);
+}
+
+function doGet(e) {
+  return handleAllRequests(e);
+}
+
+function handleAllRequests(e) {
+  try {
+    var rawData = "";
+    if (e && e.parameter && e.parameter.data) {
+      rawData = e.parameter.data;
+    } else if (e && e.postData && e.postData.contents) {
+      rawData = e.postData.contents;
+    } else if (e && e.postData && typeof e.postData.getDataAsString === "function") {
+      rawData = e.postData.getDataAsString();
+    } else if (e && e.parameter && e.parameter.payload) {
+      rawData = e.parameter.payload;
+    }
+
+    if (!rawData) {
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: "success", message: "Web App Absensi SMPN 2 Paciran Aktif & Siap Digunakan!" })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var data;
+    try {
+      data = JSON.parse(rawData);
+    } catch (parseErr) {
+      data = JSON.parse(decodeURIComponent(rawData));
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      throw new Error("Spreadsheet tidak ditemukan. Pastikan Apps Script dibuat melalui menu Ekstensi > Apps Script di Google Sheets Anda.");
+    }
+
+    // =========================================================================
+    // 1. FORMAT REKAP ABSENSI RESMI (PERSIS SEPERTI TAB REKAPITULASI APLIKASI)
+    // - Kop Resmi Sekolah
+    // - Header 2 Baris: Nama Hari (Min, Sen, ...) + Nomor Tanggal (1..31)
+    // - Status Siswa: H, S, I, A, L (Jumat Libur), -
+    // - Kolom Total: H, S, I, A, % Hadir
+    // - Baris Footer: Jumlah Hadir Harian
+    // - Tabel Ringkasan Persentase Kehadiran
+    // - Format Tanda Tangan Kepala Sekolah & Wali Kelas
+    // =========================================================================
+    if (data.action === "save_monthly_matrix" || data.matrix) {
+      var bulan = data.bulan || "Bulan";
+      var kelas = data.kelas || "Semua";
+      var sheetName = bulan + " " + kelas;
+      var sheet = ss.getSheetByName(sheetName);
+
+      if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
+      } else {
+        sheet.clear();
+      }
+
+      var daysInMonth = parseInt(data.daysInMonth, 10) || 31;
+      var tahun = data.tahun || new Date().getFullYear();
+      var schoolName = data.school || "SMP NEGERI 2 PACIRAN";
+      var alamat = data.alamat || "Jl. Raya Paciran No. 123, Paciran, Lamongan";
+      var kepalaSekolah = data.kepalaSekolah || "Drs. H. M. Zainuri, M.Pd.";
+      var nipKepalaSekolah = data.nipKepalaSekolah || "19680512 199403 1 005";
+      var waliKelas = data.waliKelas || "Guru Piket / Wali Kelas";
+      var nipWaliKelas = data.nipWaliKelas || "19850720 201001 2 018";
+      var daysInfo = data.daysInfo || [];
+
+      // Total Kolom: NO, NIBK, NAMA, JK, KELAS (5) + Hari (1..N) + H, S, I, A, % (5)
+      var totalColumns = 5 + daysInMonth + 5;
+
+      // Pastikan jumlah kolom sheet mencukupi (Google Sheet default hanya 26 kolom A-Z)
+      if (sheet.getMaxColumns() < totalColumns) {
+        sheet.insertColumnsAfter(sheet.getMaxColumns(), totalColumns - sheet.getMaxColumns());
+      }
+
+      // Helper konversi indeks kolom angka ke huruf kolom Spreadsheet (misal: 1->A, 26->Z, 27->AA)
+      function colToLetter(col) {
+        var temp, letter = '';
+        while (col > 0) {
+          temp = (col - 1) % 26;
+          letter = String.fromCharCode(temp + 65) + letter;
+          col = Math.floor((col - temp - 1) / 26);
+        }
+        return letter;
+      }
+
+      var firstDayCol = colToLetter(6);
+      var lastDayCol = colToLetter(5 + daysInMonth);
+      var colHLetter = colToLetter(5 + daysInMonth + 1);
+      var colSLetter = colToLetter(5 + daysInMonth + 2);
+      var colILetter = colToLetter(5 + daysInMonth + 3);
+      var colALetter = colToLetter(5 + daysInMonth + 4);
+      var colPctLetter = colToLetter(5 + daysInMonth + 5);
+
+      // 1. Kop Surat & Judul Rekapitulasi
+      sheet.getRange(1, 1).setValue("PEMERINTAH KABUPATEN LAMONGAN • DINAS PENDIDIKAN");
+      sheet.getRange(1, 1).setFontSize(10).setFontWeight("bold").setFontColor("#475569");
+
+      sheet.getRange(2, 1).setValue(schoolName.toUpperCase());
+      sheet.getRange(2, 1).setFontSize(14).setFontWeight("bold").setFontColor("#0f172a");
+
+      sheet.getRange(3, 1).setValue(alamat);
+      sheet.getRange(3, 1).setFontSize(9).setFontColor("#64748b");
+
+      sheet.getRange(4, 1).setValue("REKAPITULASI PRESENSI SISWA BULAN " + String(bulan).toUpperCase() + " " + tahun + " - KELAS " + kelas.toUpperCase());
+      sheet.getRange(4, 1).setFontSize(12).setFontWeight("bold").setFontColor("#047857");
+
+      // 2. Baris Header Tabel
+      var headerRow1 = ["NO", "NIBK", "NAMA LENGKAP", "JK", "KELAS"];
+      var headerRow2 = ["", "", "", "", ""];
+
+      var dayNamesShort = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+      for (var d = 1; d <= daysInMonth; d++) {
+        var dayName = "";
+        if (daysInfo && daysInfo[d - 1] && daysInfo[d - 1].dayName) {
+          dayName = daysInfo[d - 1].dayName;
+        } else {
+          var dateObj = new Date(tahun, (data.bulanAngka ? data.bulanAngka - 1 : 0), d);
+          dayName = dayNamesShort[dateObj.getDay()];
+        }
+        headerRow1.push(dayName);
+        headerRow2.push(String(d));
+      }
+
+      headerRow1.push("H", "S", "I", "A", "% Hadir");
+      headerRow2.push("", "", "", "", "");
+
+      var headerRange1 = sheet.getRange(6, 1, 1, totalColumns);
+      headerRange1.setValues([headerRow1])
+                  .setFontWeight("bold")
+                  .setBackground("#1e293b")
+                  .setFontColor("#ffffff")
+                  .setHorizontalAlignment("center")
+                  .setFontSize(9);
+
+      var headerRange2 = sheet.getRange(7, 1, 1, totalColumns);
+      headerRange2.setValues([headerRow2])
+                  .setFontWeight("bold")
+                  .setBackground("#334155")
+                  .setFontColor("#f8fafc")
+                  .setHorizontalAlignment("center")
+                  .setFontSize(10);
+
+      // Merge kolom non-tanggal (NO, NIBK, NAMA, JK, KELAS, H, S, I, A, %)
+      sheet.getRange(6, 1, 2, 1).merge().setValue("NO");
+      sheet.getRange(6, 2, 2, 1).merge().setValue("NIBK");
+      sheet.getRange(6, 3, 2, 1).merge().setValue("NAMA SISWA");
+      sheet.getRange(6, 4, 2, 1).merge().setValue("JK");
+      sheet.getRange(6, 5, 2, 1).merge().setValue("KELAS");
+
+      sheet.getRange(6, 5 + daysInMonth + 1, 2, 1).merge().setValue("H").setBackground("#065f46");
+      sheet.getRange(6, 5 + daysInMonth + 2, 2, 1).merge().setValue("S").setBackground("#92400e");
+      sheet.getRange(6, 5 + daysInMonth + 3, 2, 1).merge().setValue("I").setBackground("#3730a3");
+      sheet.getRange(6, 5 + daysInMonth + 4, 2, 1).merge().setValue("A").setBackground("#9f1239");
+      sheet.getRange(6, 5 + daysInMonth + 5, 2, 1).merge().setValue("% Hadir").setBackground("#0f172a");
+
+      // Warnai header kolom hari Jumat (Libur)
+      for (var dj = 1; dj <= daysInMonth; dj++) {
+        var isFri = (daysInfo && daysInfo[dj - 1]) ? daysInfo[dj - 1].isFriday : (headerRow1[5 + dj - 1] === "Jum");
+        if (isFri) {
+          sheet.getRange(6, 5 + dj, 1, 1).setBackground("#881337").setFontColor("#fecdd3");
+          sheet.getRange(7, 5 + dj, 1, 1).setBackground("#9f1239").setFontColor("#ffffff");
+        }
+      }
+
+      // 3. Isi Data Baris Siswa dengan Rumus Otomatis (COUNTIF & Persentase Dinamis 0.0%)
+      var matrixRows = [];
+      var matrix = data.matrix || [];
+      var startDataRow = 8;
+      var endDataRow = startDataRow + matrix.length - 1;
+
+      for (var i = 0; i < matrix.length; i++) {
+        var s = matrix[i];
+        var currentRow = startDataRow + i;
+        var row = [
+          i + 1,
+          "'" + (s.nibk || ""),
+          s.nama || "",
+          s.jk || "",
+          s.kelas || ""
+        ];
+
+        // Isi status harian tanggal 1..N
+        for (var day = 1; day <= daysInMonth; day++) {
+          var val = (s.dailyStatus && s.dailyStatus[day]) ? s.dailyStatus[day] : "-";
+          row.push(val);
+        }
+
+        // RUMUS OTOMATIS SPREADSHEET:
+        // H, S, I, A dihitung dinamis dengan COUNTIF sehingga jika diisi di tengah bulan langsung terupdate
+        var formulaH = '=COUNTIF(' + firstDayCol + currentRow + ':' + lastDayCol + currentRow + ', "H")';
+        var formulaS = '=COUNTIF(' + firstDayCol + currentRow + ':' + lastDayCol + currentRow + ', "S")';
+        var formulaI = '=COUNTIF(' + firstDayCol + currentRow + ':' + lastDayCol + currentRow + ', "I")';
+        var formulaA = '=COUNTIF(' + firstDayCol + currentRow + ':' + lastDayCol + currentRow + ', "A")';
+
+        // PERSENTASE OTOMATIS: membagi H dengan (H+S+I+A) dari data yang terisi saja (meski bulan belum selesai)
+        var sumActiveRecorded = '(' + colHLetter + currentRow + '+' + colSLetter + currentRow + '+' + colILetter + currentRow + '+' + colALetter + currentRow + ')';
+        var formulaPct = '=IF(' + sumActiveRecorded + '>0, ' + colHLetter + currentRow + '/' + sumActiveRecorded + ', 0)';
+
+        row.push(formulaH);
+        row.push(formulaS);
+        row.push(formulaI);
+        row.push(formulaA);
+        row.push(formulaPct);
+
+        matrixRows.push(row);
+      }
+
+      if (matrixRows.length > 0) {
+        var dataRange = sheet.getRange(startDataRow, 1, matrixRows.length, totalColumns);
+        dataRange.setValues(matrixRows);
+        dataRange.setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
+        dataRange.setFontSize(10);
+
+        // Alignment kolom
+        sheet.getRange(startDataRow, 1, matrixRows.length, 1).setHorizontalAlignment("center");
+        sheet.getRange(startDataRow, 4, matrixRows.length, 1).setHorizontalAlignment("center");
+        sheet.getRange(startDataRow, 5, matrixRows.length, 1).setHorizontalAlignment("center");
+        sheet.getRange(startDataRow, 6, matrixRows.length, daysInMonth).setHorizontalAlignment("center");
+        sheet.getRange(startDataRow, 5 + daysInMonth + 1, matrixRows.length, 5).setHorizontalAlignment("center");
+        sheet.getRange(startDataRow, 5 + daysInMonth + 5, matrixRows.length, 1).setFontWeight("bold");
+
+        // Format angka presisi 0.0% untuk kolom % Hadir
+        sheet.getRange(startDataRow, 5 + daysInMonth + 5, matrixRows.length, 1).setNumberFormat("0.0%");
+
+        // Background styling untuk kolom summary per baris
+        sheet.getRange(startDataRow, 5 + daysInMonth + 1, matrixRows.length, 1).setBackground("#ecfdf5").setFontColor("#065f46").setFontWeight("bold");
+        sheet.getRange(startDataRow, 5 + daysInMonth + 2, matrixRows.length, 1).setBackground("#fffbeb").setFontColor("#92400e").setFontWeight("bold");
+        sheet.getRange(startDataRow, 5 + daysInMonth + 3, matrixRows.length, 1).setBackground("#eef2ff").setFontColor("#3730a3").setFontWeight("bold");
+        sheet.getRange(startDataRow, 5 + daysInMonth + 4, matrixRows.length, 1).setBackground("#fff1f2").setFontColor("#9f1239").setFontWeight("bold");
+      }
+
+      // 4. Baris Footer: Jumlah Hadir Harian & Total Dinamis Terhubung
+      var footerRowIndex = startDataRow + matrixRows.length;
+      var footerRow = ["", "", "", "", "Jumlah Hadir Harian:"];
+      
+      for (var fDay = 1; fDay <= daysInMonth; fDay++) {
+        var isFridayFooter = (daysInfo && daysInfo[fDay - 1]) ? daysInfo[fDay - 1].isFriday : (headerRow1[5 + fDay - 1] === "Jum");
+        if (isFridayFooter) {
+          footerRow.push("L");
+        } else {
+          var dayColLet = colToLetter(5 + fDay);
+          footerRow.push(matrixRows.length > 0 ? ('=COUNTIF(' + dayColLet + startDataRow + ':' + dayColLet + endDataRow + ', "H")') : 0);
+        }
+      }
+
+      if (matrixRows.length > 0) {
+        var footerFormulaH = '=SUM(' + colHLetter + startDataRow + ':' + colHLetter + endDataRow + ')';
+        var footerFormulaS = '=SUM(' + colSLetter + startDataRow + ':' + colSLetter + endDataRow + ')';
+        var footerFormulaI = '=SUM(' + colILetter + startDataRow + ':' + colILetter + endDataRow + ')';
+        var footerFormulaA = '=SUM(' + colALetter + startDataRow + ':' + colALetter + endDataRow + ')';
+        var sumFooterRecorded = '(' + colHLetter + footerRowIndex + '+' + colSLetter + footerRowIndex + '+' + colILetter + footerRowIndex + '+' + colALetter + footerRowIndex + ')';
+        var footerFormulaPct = '=IF(' + sumFooterRecorded + '>0, ' + colHLetter + footerRowIndex + '/' + sumFooterRecorded + ', 0)';
+
+        footerRow.push(footerFormulaH, footerFormulaS, footerFormulaI, footerFormulaA, footerFormulaPct);
+      } else {
+        footerRow.push(0, 0, 0, 0, 0);
+      }
+
+      sheet.getRange(footerRowIndex, 1, 1, 5).merge().setValue("Jumlah Hadir Harian:").setHorizontalAlignment("right").setFontWeight("bold");
+      sheet.getRange(footerRowIndex, 6, 1, daysInMonth + 5).setValues([footerRow.slice(5)]);
+
+      var footerRange = sheet.getRange(footerRowIndex, 1, 1, totalColumns);
+      footerRange.setFontWeight("bold")
+                 .setBackground("#f1f5f9")
+                 .setBorder(true, true, true, true, true, true, "#94a3b8", SpreadsheetApp.BorderStyle.SOLID)
+                 .setFontSize(10);
+      sheet.getRange(footerRowIndex, 6, 1, daysInMonth + 5).setHorizontalAlignment("center");
+      sheet.getRange(footerRowIndex, 5 + daysInMonth + 5, 1, 1).setBackground("#1e293b").setFontColor("#ffffff").setNumberFormat("0.0%");
+
+      // =========================================================================
+      // 5. TABEL REKAPITULASI TOTAL & PERSENTASE TERHUBUNG OTOMATIS KE HASIL SUM FOOTER
+      // =========================================================================
+      var summaryStartRow = footerRowIndex + 3;
+
+      sheet.getRange(summaryStartRow, 1).setValue("REKAPITULASI TOTAL KEHADIRAN KELAS BULAN " + String(bulan).toUpperCase() + " " + tahun);
+      sheet.getRange(summaryStartRow, 1).setFontWeight("bold").setFontSize(11).setFontColor("#0f172a");
+
+      var rowHIndex = summaryStartRow + 2;
+      var rowSIndex = summaryStartRow + 3;
+      var rowIIndex = summaryStartRow + 4;
+      var rowAIndex = summaryStartRow + 5;
+      var rowTotalIndex = summaryStartRow + 6;
+
+      var summaryTable = [
+        ["Kategori Kehadiran", "Keterangan", "Total Hari/Siswa", "Persentase (%)"],
+        ["Hadir (H)", "Siswa Masuk Mengikuti Pembelajaran", "=" + colHLetter + footerRowIndex, "=IF(C" + rowTotalIndex + ">0, C" + rowHIndex + "/C" + rowTotalIndex + ", 0)"],
+        ["Sakit (S)", "Siswa Berhalangan Karena Sakit", "=" + colSLetter + footerRowIndex, "=IF(C" + rowTotalIndex + ">0, C" + rowSIndex + "/C" + rowTotalIndex + ", 0)"],
+        ["Izin (I)", "Siswa Izin dengan Keterangan", "=" + colILetter + footerRowIndex, "=IF(C" + rowTotalIndex + ">0, C" + rowIIndex + "/C" + rowTotalIndex + ", 0)"],
+        ["Alpa / Tanpa Keterangan (A)", "Siswa Tidak Hadir Tanpa Surat/Kabar", "=" + colALetter + footerRowIndex, "=IF(C" + rowTotalIndex + ">0, C" + rowAIndex + "/C" + rowTotalIndex + ", 0)"],
+        ["TOTAL KESELURUHAN", "Akumulasi Seluruh Hari Efektif Belajar", "=SUM(C" + rowHIndex + ":C" + rowAIndex + ")", "=IF(C" + rowTotalIndex + ">0, 1, 0)"]
+      ];
+
+      var summaryRange = sheet.getRange(summaryStartRow + 1, 1, summaryTable.length, 4);
+      summaryRange.setValues(summaryTable);
+      summaryRange.setBorder(true, true, true, true, true, true, "#94a3b8", SpreadsheetApp.BorderStyle.SOLID);
+      summaryRange.setFontSize(10);
+
+      // Format Presisi Persentase 0.0% di Tabel Rekapitulasi
+      sheet.getRange(summaryStartRow + 2, 4, 5, 1).setNumberFormat("0.0%");
+
+      // Header summary styling
+      sheet.getRange(summaryStartRow + 1, 1, 1, 4)
+           .setFontWeight("bold")
+           .setBackground("#047857")
+           .setFontColor("#ffffff")
+           .setHorizontalAlignment("center");
+
+      // Total baris styling
+      sheet.getRange(summaryStartRow + summaryTable.length, 1, 1, 4)
+           .setFontWeight("bold")
+           .setBackground("#e2e8f0");
+
+      sheet.getRange(summaryStartRow + 2, 3, summaryTable.length - 1, 2)
+           .setHorizontalAlignment("center");
+
+      // =========================================================================
+      // 6. FORMAT TANDA TANGAN (KEPALA SEKOLAH & WALI KELAS)
+      // =========================================================================
+      var sigStartRow = summaryStartRow + summaryTable.length + 3;
+
+      // Kiri: Kepala Sekolah
+      sheet.getRange(sigStartRow, 2).setValue("Mengetahui,");
+      sheet.getRange(sigStartRow + 1, 2).setValue("Kepala " + schoolName).setFontWeight("bold");
+      sheet.getRange(sigStartRow + 5, 2).setValue(kepalaSekolah).setFontWeight("bold").setFontUnderline("single");
+      sheet.getRange(sigStartRow + 6, 2).setValue("NIP. " + nipKepalaSekolah);
+
+      // Kanan: Wali Kelas / Guru Piket
+      var rightCol = Math.max(10, totalColumns - 4);
+      sheet.getRange(sigStartRow, rightCol).setValue("Paciran, " + daysInMonth + " " + bulan + " " + tahun);
+      sheet.getRange(sigStartRow + 1, rightCol).setValue("Wali Kelas / Guru Piket").setFontWeight("bold");
+      sheet.getRange(sigStartRow + 5, rightCol).setValue(waliKelas).setFontWeight("bold").setFontUnderline("single");
+      sheet.getRange(sigStartRow + 6, rightCol).setValue("NIP. " + nipWaliKelas);
+
+      // Auto-fit kolom nama dan ukuran kolom tanggal
+      sheet.setColumnWidth(1, 35); // NO
+      sheet.setColumnWidth(2, 85); // NIBK
+      sheet.setColumnWidth(3, 190); // NAMA
+      sheet.setColumnWidth(4, 35); // JK
+      sheet.setColumnWidth(5, 50); // KELAS
+
+      for (var c = 6; c <= 5 + daysInMonth; c++) {
+        sheet.setColumnWidth(c, 30);
+      }
+      sheet.setColumnWidth(5 + daysInMonth + 1, 38); // H
+      sheet.setColumnWidth(5 + daysInMonth + 2, 38); // S
+      sheet.setColumnWidth(5 + daysInMonth + 3, 38); // I
+      sheet.setColumnWidth(5 + daysInMonth + 4, 38); // A
+      sheet.setColumnWidth(5 + daysInMonth + 5, 65); // % Hadir
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        sheet: sheetName,
+        message: "Rekapitulasi absensi bulanan resmi berhasil dibuat di sheet: " + sheetName
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // =========================================================================
+    // 2. FORMAT LOG HARIAN KETIKA SIMPAN ABSENSI KELAS
+    // =========================================================================
+    var namaBulan = "";
+    if (data.tanggal) {
+      var dateParts = String(data.tanggal).split("-");
+      var bulanArray = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      if (dateParts.length === 3) {
+        var monthIndex = parseInt(dateParts[1], 10) - 1;
+        namaBulan = bulanArray[monthIndex] || "";
+      }
+    }
+    if (!namaBulan && data.bulan) namaBulan = data.bulan;
+
+    var logSheetName = (namaBulan ? (namaBulan + " ") : "Absensi_") + (data.kelas || "Semua");
+    var logSheet = ss.getSheetByName(logSheetName);
+
+    if (!logSheet) {
+      logSheet = ss.insertSheet(logSheetName);
+      logSheet.appendRow(["Waktu Simpan", "NIBK", "Nama Lengkap", "Kelas", "Tanggal", "Status", "Catatan"]);
+      logSheet.getRange(1, 1, 1, 7)
+              .setFontWeight("bold")
+              .setBackground("#10b981")
+              .setFontColor("#ffffff");
+    }
+
+    if (data.records && data.records.length > 0) {
+      var rows = [];
+      for (var k = 0; k < data.records.length; k++) {
+        var r = data.records[k];
+        rows.push([
+          r.waktuUpdate || new Date().toLocaleString("id-ID"),
+          "'" + (r.nibk || ""),
+          r.nama || "",
+          r.kelas || "",
+          r.tanggal || "",
+          r.status || "",
+          r.catatan || ""
+        ]);
+      }
+
+      if (rows.length > 0) {
+        logSheet.getRange(logSheet.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      sheet: logSheetName,
+      count: data.records ? data.records.length : 0
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    Logger.log("Error: " + err.toString());
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+  const copyAppsScript = () => {
+    navigator.clipboard.writeText(appsScriptCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 3000);
+  };
+
+  // Test Webhook Connection
+  const handleTestWebhook = async () => {
+    const rawUrl = formData.googleWebhookUrl ? formData.googleWebhookUrl.trim() : '';
+    if (!rawUrl) {
+      setTestResult({
+        loading: false,
+        msg: 'Silakan masukkan URL Webhook Google Apps Script terlebih dahulu.',
+        success: false,
+      });
+      return;
+    }
+
+    if (rawUrl.includes('/edit')) {
+      setTestResult({
+        loading: false,
+        msg: '⚠️ URL yang Anda masukkan adalah URL Editor skrip (/edit). Harap klik tombol Terapkan (Deploy) > Deployment baru di Apps Script untuk mendapatkan URL Web App yang berakhiran /exec.',
+        success: false,
+      });
+      return;
+    }
+
+    if (rawUrl.includes('docs.google.com/spreadsheets')) {
+      setTestResult({
+        loading: false,
+        msg: '⚠️ URL ini adalah tautan Google Spreadsheet, bukan URL Webhook Apps Script. Silakan buka menu Ekstensi > Apps Script di Spreadsheet Anda, lalu terapkan skrip sebagai Aplikasi Web.',
+        success: false,
+      });
+      return;
+    }
+
+    setTestResult({ loading: true, msg: 'Mengirim data uji coba ke Spreadsheet...' });
+    const dummyRecord: AttendanceRecord = {
+      id: 'test_record_' + Date.now(),
+      studentId: 'test_std_01',
+      nibk: '240001',
+      nama: 'TEST KONEKSI SISWA',
+      kelas: '7A',
+      tanggal: new Date().toISOString().split('T')[0],
+      status: 'H',
+      catatan: 'Uji koneksi webhook dari aplikasi',
+      updatedAt: Date.now(),
+    };
+
+    const res = await sendAttendanceToGoogleSheets(rawUrl, [dummyRecord], {
+      kelas: '7A',
+      tanggal: dummyRecord.tanggal,
+    });
+
+    setTestResult({
+      loading: false,
+      msg: res.success
+        ? '✅ Berhasil! Sinyal data telah dikirim ke Google Apps Script. Silakan periksa file Google Spreadsheet Anda (akan muncul tab baru).'
+        : `⚠️ Perhatian: ${res.message}`,
+      success: res.success,
+    });
+  };
+
+  // Export Full JSON Backup
+  const handleExportBackup = () => {
+    const backupObj = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      school: 'SMP NEGERI 2 PACIRAN',
+      students,
+      attendanceRecords,
+      settings: formData,
+    };
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupObj, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `Backup_Absensi_SMPN2_Paciran_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Restore JSON Backup
+  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed.students && Array.isArray(parsed.students)) {
+          onRestoreAllData(
+            parsed.students,
+            parsed.attendanceRecords || [],
+            parsed.settings || DEFAULT_SETTINGS
+          );
+          setFormData(parsed.settings || DEFAULT_SETTINGS);
+          alert(`Berhasil memulihkan ${parsed.students.length} siswa dan ${parsed.attendanceRecords?.length || 0} catatan absensi!`);
+        } else {
+          alert('Format file JSON tidak valid.');
+        }
+      } catch (err) {
+        alert('Gagal membaca file backup JSON.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Banner */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider mb-1">
+            <Settings className="w-4 h-4" />
+            <span>Konfigurasi & Integrasi</span>
+          </div>
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-900">
+            Pengaturan Aplikasi Absensi
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+            Konfigurasi profil sekolah, integrasi pengiriman Google Spreadsheet tanpa batas, dan pencadangan data.
+          </p>
+        </div>
+      </div>
+
+      {/* SECTION 1: PROFIL SEKOLAH & KOP LAPORAN */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
+              <School className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                1. Profil Sekolah & Tanda Tangan Laporan
+              </h3>
+              <p className="text-xs text-slate-500">
+                Digunakan pada judul aplikasi, kop surat cetak laporan, dan nama penandatangan.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetToDefault}
+            className="text-xs font-semibold text-slate-500 hover:text-emerald-700 flex items-center gap-1"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset Default</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Nama Sekolah
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.schoolName}
+                onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                URL Logo Sekolah
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  required
+                  value={formData.logoUrl}
+                  onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+                  className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+                />
+                <img
+                  src={formData.logoUrl}
+                  alt="Preview Logo"
+                  className="w-9 h-9 object-contain rounded-lg border border-slate-200 bg-slate-50 p-1 flex-shrink-0"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Alamat Lengkap Sekolah
+              </label>
+              <input
+                type="text"
+                value={formData.alamat}
+                onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Nama Kepala Sekolah
+              </label>
+              <input
+                type="text"
+                value={formData.kepalaSekolah}
+                onChange={(e) => setFormData({ ...formData, kepalaSekolah: e.target.value })}
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                NIP Kepala Sekolah
+              </label>
+              <input
+                type="text"
+                value={formData.nipKepalaSekolah}
+                onChange={(e) => setFormData({ ...formData, nipKepalaSekolah: e.target.value })}
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Jabatan / Wali Kelas
+              </label>
+              <input
+                type="text"
+                value={formData.waliKelas}
+                onChange={(e) => setFormData({ ...formData, waliKelas: e.target.value })}
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                NIP Wali Kelas / Guru Piket
+              </label>
+              <input
+                type="text"
+                value={formData.nipWaliKelas}
+                onChange={(e) => setFormData({ ...formData, nipWaliKelas: e.target.value })}
+                className="w-full px-3.5 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            {savedSuccess ? (
+              <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4" />
+                Pengaturan profil sekolah berhasil disimpan!
+              </span>
+            ) : <div />}
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
+            >
+              Simpan Profil Sekolah
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION 2: SUMBER DATA POKOK SISWA (GOOGLE SPREADSHEET CSV) */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                2. Sumber Data Pokok Siswa (Google Spreadsheet CSV)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Aplikasi otomatis menyinkronkan data siswa dari tautan publikasi CSV Google Spreadsheet ini saat dibuka.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
+            {students.length} Siswa Terdaftar
+          </span>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              URL Publikasi Google Sheet (Format CSV)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="url"
+                required
+                placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?gid=...&output=csv"
+                value={formData.googleSheetStudentUrl || DEFAULT_GOOGLE_SHEET_STUDENT_URL}
+                onChange={(e) => setFormData({ ...formData, googleSheetStudentUrl: e.target.value })}
+                className="flex-1 px-3.5 py-2.5 text-xs font-mono rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={handleManualSyncStudents}
+                disabled={sheetSyncResult?.loading || isSyncingSheet}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 flex-shrink-0 shadow-md shadow-emerald-600/20"
+              >
+                {sheetSyncResult?.loading || isSyncingSheet ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3.5 h-3.5" />
+                )}
+                <span>Tarik & Sinkronkan Sekarang</span>
+              </button>
+            </div>
+
+            {sheetSyncResult && (
+              <p
+                className={`text-xs font-semibold mt-2 p-2.5 rounded-xl border ${
+                  sheetSyncResult.success
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-red-50 text-red-800 border-red-200'
+                }`}
+              >
+                {sheetSyncResult.msg}
+              </p>
+            )}
+
+            <p className="text-[11px] text-slate-500 mt-2">
+              Tautan saat ini: <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700 text-[10px] break-all">{formData.googleSheetStudentUrl || DEFAULT_GOOGLE_SHEET_STUDENT_URL}</code>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 3: INTEGRASI PENGIRIMAN ABSENSI (GOOGLE APPS SCRIPT WEBHOOK) */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <div className="p-2 bg-teal-100 text-teal-800 rounded-lg">
+            <Link className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              3. Integrasi Pengiriman Absensi (Penyimpanan Tanpa Batas)
+            </h3>
+            <p className="text-xs text-slate-500">
+              Setiap kali Anda menekan "Simpan Absensi", data otomatis terkirim dan tersimpan rapi di Google Sheets sekolah.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              URL Webhook Google Apps Script (Deployment Web App)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="url"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                value={formData.googleWebhookUrl}
+                onChange={(e) => setFormData({ ...formData, googleWebhookUrl: e.target.value })}
+                className="flex-1 px-3.5 py-2.5 text-xs font-mono rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={handleTestWebhook}
+                disabled={testResult?.loading}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 flex-shrink-0"
+              >
+                {testResult?.loading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span>Uji Koneksi Webhook</span>
+              </button>
+            </div>
+            {/* Real-time URL format validator & warning */}
+            {formData.googleWebhookUrl && formData.googleWebhookUrl.includes('/edit') && (
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>URL Kurang Tepat:</strong> URL yang Anda masukkan berakhiran <code>/edit</code> (URL Editor Skrip). Harap klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Deployment Baru</strong> di Google Apps Script, lalu salin URL yang berakhiran <code>/exec</code>.
+                </div>
+              </div>
+            )}
+
+            {formData.googleWebhookUrl && formData.googleWebhookUrl.includes('/dev') && (
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>Peringatan URL /dev:</strong> URL berakhiran <code>/dev</code> membutuhkan otentikasi login Google dan akan gagal saat pengiriman otomatis. Harap gunakan URL deployment resmi yang berakhiran <code>/exec</code>.
+                </div>
+              </div>
+            )}
+
+            {testResult && (
+              <p
+                className={`text-xs font-semibold mt-2 p-3 rounded-xl border ${
+                  testResult.success
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-amber-50 text-amber-900 border-amber-200'
+                }`}
+              >
+                {testResult.msg}
+              </p>
+            )}
+          </div>
+
+          {/* Troubleshooting Checklist Box */}
+          <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-2 text-xs text-amber-900">
+            <h4 className="font-extrabold text-amber-950 flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-amber-700" />
+              Penting: 3 Syarat Wajib Agar Data Berhasil Masuk ke Google Sheets:
+            </h4>
+            <ul className="space-y-1 list-disc list-inside text-amber-800/90 pl-1 leading-relaxed">
+              <li>
+                <strong>Akses (Who has access)</strong> HARUS diset ke <strong>"Siapa saja (Anyone)"</strong> saat Deployment di Google Apps Script (Bukan "Hanya saya").
+              </li>
+              <li>
+                <strong>Jalankan sebagai (Execute as)</strong> HARUS diset ke <strong>"Saya (Me / email Anda)"</strong>.
+              </li>
+              <li>
+                <strong>Setiap selesai mengganti kode script:</strong> Anda HARUS klik <strong>Terapkan (Deploy)</strong> &gt; <strong>Kelola deployment (Manage deployments)</strong> &gt; Klik ikon Pensil (Edit) &gt; Pilih Versi: <strong>"Versi baru (New version)"</strong> &gt; Klik <strong>Terapkan</strong>. (Jika hanya klik Simpan di Apps Script, Web App tetap menjalankan kode versi lama).
+              </li>
+            </ul>
+          </div>
+
+          {/* Tutorial & Script Code */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <Code className="w-4 h-4 text-emerald-600" />
+                  Kode Google Apps Script Multi-Bulan & Per-Kelas (Contoh: "November 8A")
+                </span>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Otomatis membuat tab baru per bulan dan per rombel kelas (misal <strong>November 8A</strong>, <strong>Desember 9B</strong>, dst.) lengkap dengan matriks tanggal 1-31 dan total kehadiran.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={copyAppsScript}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-300 shadow-sm transition-all flex-shrink-0"
+              >
+                {copiedCode ? (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-emerald-600">Kode Tersalin!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Salin Kode Script</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <pre className="bg-slate-900 text-emerald-400 p-3.5 rounded-xl text-[11px] font-mono overflow-x-auto max-h-56 border border-slate-800 leading-relaxed">
+              {appsScriptCode}
+            </pre>
+
+            <ol className="text-xs text-slate-600 list-decimal list-inside space-y-1 pt-1">
+              <li>Buka file Google Spreadsheet baru di Google Drive Anda.</li>
+              <li>Klik menu <strong>Ekstensi (Extensions)</strong> &gt; <strong>Apps Script</strong>.</li>
+              <li>Hapus kode bawaan (jika ada) dan tempel seluruh kode di atas.</li>
+              <li>Klik tombol <strong>Terapkan (Deploy)</strong> &gt; <strong>Deployment Baru (New deployment)</strong> &gt; Pilih jenis <strong>Aplikasi Web (Web app)</strong>.</li>
+              <li>Atur <em>Jalankan sebagai (Execute as)</em>: <strong>"Saya (Me)"</strong>, dan <em>Akses (Who has access)</em>: <strong>"Siapa saja (Anyone)"</strong>.</li>
+              <li>Klik <strong>Terapkan (Deploy)</strong> &gt; Salin <strong>URL Aplikasi Web</strong> yang dihasilkan ke kolom input Webhook di atas &gt; Simpan.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 4: BACKUP & PEMULIHAN DATA */}
+      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <div className="p-2 bg-indigo-100 text-indigo-800 rounded-lg">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              4. Cadangkan & Pulihkan Data
+            </h3>
+            <p className="text-xs text-slate-500">
+              Unduh seluruh data siswa, riwayat absensi, dan pengaturan dalam satu file JSON untuk dipindahkan ke perangkat lain.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <h4 className="text-xs font-extrabold uppercase text-slate-700">
+              Ekspor File Cadangan (Backup)
+            </h4>
+            <p className="text-xs text-slate-500">
+              Menyimpan {students.length} siswa dan {attendanceRecords.length} rekaman presensi.
+            </p>
+            <button
+              type="button"
+              onClick={handleExportBackup}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download Backup (.json)</span>
+            </button>
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <h4 className="text-xs font-extrabold uppercase text-slate-700">
+              Pulihkan dari File Backup
+            </h4>
+            <p className="text-xs text-slate-500">
+              Pilih file JSON backup yang pernah Anda unduh sebelumnya.
+            </p>
+            <label className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors">
+              <Upload className="w-4 h-4" />
+              <span>Pilih File Backup JSON</span>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportBackup}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onClearAttendanceOnly}
+            className="text-xs font-bold text-amber-700 hover:text-amber-900 hover:underline flex items-center gap-1"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Reset Riwayat Absensi Saja (Data Siswa Tetap Ada)</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="text-xs font-bold text-red-600 hover:text-red-800 hover:underline flex items-center gap-1"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Kosongkan Seluruh Database Aplikasi</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

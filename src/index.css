@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .bg-canvas-gradient {
+    background: linear-gradient(135deg, #fce7f3 0%, #fef3c7 35%, #e0f2fe 70%, #fed7aa 85%, #fbcfe8 100%);
+    background-attachment: fixed;
+  }
+}
