@@ -73,7 +73,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-900/60 text-emerald-100 border border-emerald-500/30">
               PRESENSI TERPADU
             </span>
-            <span>Jadwal Khusus: <strong>Jumat Libur</strong>, Hari <strong>Minggu Tetap Masuk</strong></span>
           </div>
           <div className="flex items-center space-x-3 text-emerald-100 font-mono text-[11px]">
             <span className="flex items-center gap-1">
