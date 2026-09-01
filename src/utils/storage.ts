@@ -9,7 +9,7 @@ export const DEFAULT_GOOGLE_SHEET_STUDENT_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vR5mT25mCkJx5XmzBvCWNhV4C7G67LLhOcFe5NKU_-5dlxQcQ2vTGhblxDbPsZcnQ/pub?gid=1662584635&single=true&output=csv';
 
 export const DEFAULT_GOOGLE_WEBHOOK_URL =
-  'https://script.google.com/macros/s/AKfycbyuDZZ43JjNU-jucIufOcOccF0BSQfWpnWyNviFIEYpBIbLIn1GoKXSM8YeE9kK0bzx/exec';
+  'https://script.google.com/macros/s/AKfycbxrjgRbPu34eN4uV1xZL16kK26mrI9XqaBvobs71AlMYMEeK_ttU_J0JpV4ILmy_YHS/exec';
 
 export const DEFAULT_SETTINGS: SchoolSettings = {
   schoolName: 'SMP NEGERI 2 PACIRAN',
@@ -165,6 +165,7 @@ export function loadSettings(): SchoolSettings {
     const parsed = JSON.parse(raw);
     const storedWebhook = parsed.googleWebhookUrl ? parsed.googleWebhookUrl.trim() : '';
     const isOldDefault =
+      storedWebhook === 'https://script.google.com/macros/s/AKfycbyuDZZ43JjNU-jucIufOcOccF0BSQfWpnWyNviFIEYpBIbLIn1GoKXSM8YeE9kK0bzx/exec' ||
       storedWebhook === 'https://script.google.com/macros/s/AKfycbx7xP4znswplcJR3z_FK5HHFHyzCK_9-rmZdgHQe8sghzej6U7Nfe-03cLPzfts7XFx/exec' ||
       storedWebhook === 'https://script.google.com/macros/s/AKfycbxNxcwmNvOmYO-Tnxbu4UL8Gcfl2k60JbIfn1wykW0zj5OhyDOltOZpzmlhfaiqTkWfEA/exec' ||
       storedWebhook === 'https://script.google.com/macros/s/AKfycby45fFU90tJzNOwFNdm4vKipP66P-hBUNJf_1o5gWiZjb9zDhYEBdniVUtnq90g_yyHAA/exec' ||
