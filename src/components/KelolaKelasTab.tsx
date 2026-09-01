@@ -722,7 +722,7 @@ export const KelolaKelasTab: React.FC<KelolaKelasTabProps> = ({
                 ) : (
                   filteredStudents.map((std, idx) => (
                     <tr
-                      key={std.id}
+                      key={`student-row-${std.id || std.nibk}-${idx}`}
                       className="hover:bg-slate-50/80 transition-colors group"
                     >
                       <td className="py-2.5 px-3.5 text-center font-mono text-slate-400">

@@ -612,7 +612,7 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
               <tbody className="divide-y divide-slate-200 text-[11px]">
                 {studentRows.map((row, idx) => (
                   <tr
-                    key={row.student.id}
+                    key={`rekap-row-${row.student.id || row.student.nibk}-${idx}`}
                     className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="py-2 px-1.5 text-center font-mono text-slate-400 border-r border-slate-200">
@@ -649,7 +649,7 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
                       if (day.isFriday) {
                         return (
                           <td
-                            key={`cell-${row.student.id}-${day.dayNumber}`}
+                            key={`cell-${row.student.id || idx}-${day.dayNumber}`}
                             className="py-1 px-0.5 text-center border-r border-slate-200 bg-rose-50/70 font-extrabold text-rose-600 text-[10px]"
                             title="Jumat: Libur Resmi Sekolah"
                           >
@@ -660,7 +660,7 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
 
                       return (
                         <td
-                          key={`cell-${row.student.id}-${day.dayNumber}`}
+                          key={`cell-${row.student.id || idx}-${day.dayNumber}`}
                           className="py-1 px-0.5 text-center border-r border-slate-200"
                         >
                           {status === 'H' ? (

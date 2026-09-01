@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { SchoolSettings, Student, AttendanceRecord } from '../types';
-import { DEFAULT_SETTINGS, DEFAULT_GOOGLE_SHEET_STUDENT_URL, sendAttendanceToGoogleSheets } from '../utils/storage';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_GOOGLE_SHEET_STUDENT_URL,
+  sendAttendanceToGoogleSheets,
+  pushSettingsToCloud,
+  fetchRemoteSettings,
+} from '../utils/storage';
 import {
   Settings,
   School,
@@ -18,6 +24,21 @@ import {
   Globe,
   AlertCircle,
   Info,
+  Lock,
+  Unlock,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  User,
+  KeyRound,
+  LogIn,
+  LogOut,
+  CheckCircle2,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
+  Wifi,
+  Radio,
 } from 'lucide-react';
 
 interface PengaturanTabProps {
@@ -29,6 +50,7 @@ interface PengaturanTabProps {
   onClearAttendanceOnly: () => void;
   onClearAll: () => void;
   onSyncGoogleSheet?: (customUrl?: string, showToast?: boolean) => Promise<{ success: boolean; count: number; classes: string[] }>;
+  onSyncRemoteSettings?: (showToast?: boolean) => Promise<{ success: boolean; updated?: boolean }>;
   isSyncingSheet?: boolean;
 }
 
@@ -41,6 +63,7 @@ export const PengaturanTab: React.FC<PengaturanTabProps> = ({
   onClearAttendanceOnly,
   onClearAll,
   onSyncGoogleSheet,
+  onSyncRemoteSettings,
   isSyncingSheet = false,
 }) => {
   const [formData, setFormData] = useState<SchoolSettings>({ ...settings });
@@ -48,16 +71,115 @@ export const PengaturanTab: React.FC<PengaturanTabProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
   const [testResult, setTestResult] = useState<{ loading: boolean; msg: string; success?: boolean } | null>(null);
   const [sheetSyncResult, setSheetSyncResult] = useState<{ loading: boolean; msg: string; success?: boolean } | null>(null);
+  const [cloudSyncLoading, setCloudSyncLoading] = useState(false);
+  const [cloudSyncResult, setCloudSyncResult] = useState<{ loading: boolean; msg: string; success?: boolean } | null>(null);
+
+  // Admin Authentication State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('spadaran_admin_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+
+    const user = adminUsername.trim().toLowerCase();
+    const pass = adminPassword.trim();
+
+    if (user === 'smpn2paciran' && pass === 'adminspadaran') {
+      setIsAdminAuthenticated(true);
+      try {
+        sessionStorage.setItem('spadaran_admin_auth', 'true');
+      } catch (err) {
+        console.error('Session storage error:', err);
+      }
+      setLoginError(null);
+    } else {
+      setLoginError('Username atau Password Admin salah! Periksa kembali data login Anda.');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    setAdminUsername('');
+    setAdminPassword('');
+    try {
+      sessionStorage.removeItem('spadaran_admin_auth');
+    } catch (err) {
+      console.error('Session storage error:', err);
+    }
+  };
 
   React.useEffect(() => {
     setFormData({ ...settings });
   }, [settings]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     onSaveSettings(formData);
     setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    setTimeout(() => setSavedSuccess(false), 4000);
+
+    // Otomatis sebar / push pengaturan ke Cloud jika Webhook URL tersedia
+    if (formData.googleWebhookUrl) {
+      setCloudSyncLoading(true);
+      const res = await pushSettingsToCloud(formData, formData.googleWebhookUrl);
+      setCloudSyncLoading(false);
+      setCloudSyncResult({
+        loading: false,
+        msg: res.success
+          ? 'Pengaturan berhasil disimpan dan di-update ke Cloud Spreadsheet untuk SEMUA perangkat!'
+          : res.message,
+        success: res.success,
+      });
+      setTimeout(() => setCloudSyncResult(null), 6000);
+    }
+  };
+
+  const handlePushSettingsToCloudManual = async () => {
+    setCloudSyncLoading(true);
+    setCloudSyncResult({ loading: true, msg: 'Sedang menyebarkan pengaturan ke Cloud Spreadsheet...' });
+    const res = await pushSettingsToCloud(formData, formData.googleWebhookUrl);
+    setCloudSyncLoading(false);
+    setCloudSyncResult({
+      loading: false,
+      msg: res.success
+        ? 'Sukses! Pengaturan berhasil disimpan di Cloud Spreadsheet dan otomatis tersinkron ke semua perangkat yang mengakses web app ini.'
+        : res.message,
+      success: res.success,
+    });
+  };
+
+  const handlePullSettingsFromCloudManual = async () => {
+    if (onSyncRemoteSettings) {
+      setCloudSyncLoading(true);
+      setCloudSyncResult({ loading: true, msg: 'Sedang mengecek dan menarik pengaturan dari Cloud...' });
+      const res = await onSyncRemoteSettings(false);
+      setCloudSyncLoading(false);
+      if (res.success) {
+        setCloudSyncResult({
+          loading: false,
+          msg: res.updated
+            ? 'Pengaturan terbaru dari Cloud Admin berhasil ditarik dan diterapkan ke perangkat ini.'
+            : 'Pengaturan perangkat ini sudah cocok dan sinkron dengan Admin Pusat.',
+          success: true,
+        });
+      } else {
+        setCloudSyncResult({
+          loading: false,
+          msg: 'Gagal menarik pengaturan dari Cloud. Pastikan Webhook sudah aktif dan telah dideploy sebagai Aplikasi Web.',
+          success: false,
+        });
+      }
+    }
   };
 
   const handleResetToDefault = () => {
@@ -449,7 +571,72 @@ function handleAllRequests(e) {
     }
 
     // =========================================================================
-    // 2. FORMAT LOG HARIAN KETIKA SIMPAN ABSENSI KELAS
+    // 2. PENGATURAN REMOTE CLOUD (SINKRONISASI PENGATURAN KE SELURUH PERANGKAT)
+    // =========================================================================
+    if (data.action === "save_settings" || (e && e.parameter && e.parameter.action === "save_settings")) {
+      var configSheet = ss.getSheetByName("CONFIG_PENGATURAN");
+      if (!configSheet) {
+        configSheet = ss.insertSheet("CONFIG_PENGATURAN");
+      }
+      configSheet.clear();
+      configSheet.appendRow(["Kunci Pengaturan", "Nilai / Value", "Waktu Pembaruan Terakhir"]);
+      configSheet.getRange(1, 1, 1, 3)
+                 .setFontWeight("bold")
+                 .setBackground("#059669")
+                 .setFontColor("#ffffff");
+
+      var settingsObj = data.settings || data;
+      var keys = [
+        "schoolName", "logoUrl", "alamat", "kepalaSekolah", 
+        "nipKepalaSekolah", "waliKelas", "nipWaliKelas", 
+        "googleWebhookUrl", "googleSheetStudentUrl", "autoSync", "updatedAt"
+      ];
+
+      var nowStr = new Date().toLocaleString("id-ID");
+      var rowsToInsert = [];
+      for (var ki = 0; ki < keys.length; ki++) {
+        var kName = keys[ki];
+        var kVal = settingsObj[kName] !== undefined ? String(settingsObj[kName]) : "";
+        rowsToInsert.push([kName, kVal, nowStr]);
+      }
+      if (rowsToInsert.length > 0) {
+        configSheet.getRange(2, 1, rowsToInsert.length, 3).setValues(rowsToInsert);
+      }
+
+      configSheet.setColumnWidth(1, 180);
+      configSheet.setColumnWidth(2, 450);
+      configSheet.setColumnWidth(3, 180);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Pengaturan berhasil disimpan di Cloud Spreadsheet dan siap disinkronkan ke seluruh perangkat!",
+        updatedAt: new Date().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (data.action === "get_settings" || (e && e.parameter && e.parameter.action === "get_settings")) {
+      var configSheet = ss.getSheetByName("CONFIG_PENGATURAN");
+      var configData = {};
+      if (configSheet && configSheet.getLastRow() >= 2) {
+        var vals = configSheet.getDataRange().getValues();
+        for (var i = 1; i < vals.length; i++) {
+          var k = String(vals[i][0] || "").trim();
+          var v = vals[i][1];
+          if (k) {
+            if (v === "true") configData[k] = true;
+            else if (v === "false") configData[k] = false;
+            else configData[k] = v;
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        settings: configData
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // =========================================================================
+    // 3. FORMAT LOG HARIAN KETIKA SIMPAN ABSENSI KELAS
     // =========================================================================
     var namaBulan = "";
     if (data.tanggal) {
@@ -621,19 +808,233 @@ function handleAllRequests(e) {
 
   return (
     <div className="space-y-8">
-      {/* Banner */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider mb-1">
-            <Settings className="w-4 h-4" />
-            <span>Konfigurasi & Integrasi</span>
+      {!isAdminAuthenticated ? (
+        <div className="max-w-md mx-auto my-8">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl space-y-6">
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                <ShieldCheck className="w-9 h-9" />
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <Lock className="w-3.5 h-3.5" />
+                Akses Terbatas Administrator
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 pt-1">
+                Login Pengaturan Admin
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto">
+                Menu Pengaturan hanya dapat diakses oleh Administrator resmi SMP Negeri 2 Paciran.
+              </p>
+            </div>
+
+            {/* Error Alert */}
+            {loginError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1">
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                <p className="font-semibold">{loginError}</p>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Username Administrator
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    value={adminUsername}
+                    onChange={(e) => {
+                      setAdminUsername(e.target.value);
+                      if (loginError) setLoginError(null);
+                    }}
+                    placeholder="smpn2paciran"
+                    className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Password Administrator
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={adminPassword}
+                    onChange={(e) => {
+                      setAdminPassword(e.target.value);
+                      if (loginError) setLoginError(null);
+                    }}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all duration-150"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Buka Menu Pengaturan</span>
+              </button>
+            </form>
+
+            {/* Info Footer */}
+            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center text-[11px] text-slate-500">
+              SMP Negeri 2 Paciran • Sistem Presensi Terpadu
+            </div>
           </div>
-          <h2 className="text-xl md:text-2xl font-extrabold text-slate-900">
-            Pengaturan Aplikasi Absensi
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-            Konfigurasi profil sekolah, integrasi pengiriman Google Spreadsheet tanpa batas, dan pencadangan data.
-          </p>
+        </div>
+      ) : (
+        <>
+          {/* Banner */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider mb-1">
+                <Settings className="w-4 h-4" />
+                <span>Konfigurasi & Integrasi</span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-extrabold text-slate-900">
+                Pengaturan Aplikasi Absensi
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                Konfigurasi profil sekolah, integrasi pengiriman Google Spreadsheet tanpa batas, dan pencadangan data.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Admin Terverifikasi</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAdminLogout}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-200 transition-colors"
+                title="Kunci kembali menu pengaturan"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Kunci / Logout</span>
+              </button>
+            </div>
+          </div>
+
+      {/* SECTION REMOTE CLOUD SYNC: SINKRONISASI PENGATURAN KE SELURUH PERANGKAT */}
+      <div className="bg-gradient-to-br from-emerald-900 to-slate-900 text-white rounded-2xl p-6 shadow-lg border border-emerald-700/50 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-800/60 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl shadow-inner">
+              <Radio className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-white">
+                  Remote Cloud Sync (Sinkronisasi Jarak Jauh)
+                </h3>
+                <span className="px-2 py-0.5 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                  Live Admin
+                </span>
+              </div>
+              <p className="text-xs text-emerald-200/80 mt-0.5">
+                Perubahan pengaturan yang Anda simpan di sini akan otomatis disebarkan & diterapkan di semua perangkat guru/wali kelas secara real-time melalui Cloud.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {formData.googleWebhookUrl ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 border border-emerald-400/30 text-emerald-200">
+                <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Cloud Sync Aktif</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 border border-amber-400/30 text-amber-200">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Webhook Belum Diisi</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            onClick={handlePushSettingsToCloudManual}
+            disabled={cloudSyncLoading || !formData.googleWebhookUrl}
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-950/40 transition-all cursor-pointer"
+          >
+            {cloudSyncLoading ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <CloudUpload className="w-4 h-4 text-emerald-200" />
+            )}
+            <span>🚀 Sebarkan Pengaturan ke Seluruh Perangkat (Push)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePullSettingsFromCloudManual}
+            disabled={cloudSyncLoading || !formData.googleWebhookUrl}
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 border border-slate-700 disabled:opacity-50 text-slate-100 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            {cloudSyncLoading ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <CloudDownload className="w-4 h-4 text-slate-300" />
+            )}
+            <span>📥 Tarik Pengaturan Terbaru dari Cloud (Pull)</span>
+          </button>
+        </div>
+
+        {cloudSyncResult && (
+          <div
+            className={`p-3.5 rounded-xl text-xs font-medium border flex items-start gap-2.5 ${
+              cloudSyncResult.success
+                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-100'
+                : 'bg-red-950/80 border-red-500/50 text-red-100'
+            }`}
+          >
+            {cloudSyncResult.success ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1">
+              <span>{cloudSyncResult.msg}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="text-[11px] text-emerald-200/70 bg-emerald-950/40 p-3 rounded-xl border border-emerald-800/40 flex items-center justify-between flex-wrap gap-2">
+          <span>
+            💡 <strong>Cara Kerja:</strong> Pengaturan disimpan pada tab <code>CONFIG_PENGATURAN</code> di Google Sheet Anda. Setiap aplikasi dibuka oleh guru/wali kelas di HP atau laptop manapun, aplikasi akan otomatis mencocokkan pengaturan terbaru dari Cloud.
+          </span>
+          {settings.lastRemoteSettingsSyncTime && (
+            <span className="text-emerald-300/90 font-mono text-[10px]">
+              Sinkron Terakhir: {new Date(settings.lastRemoteSettingsSyncTime).toLocaleTimeString('id-ID')}
+            </span>
+          )}
         </div>
       </div>
 
@@ -763,18 +1164,28 @@ function handleAllRequests(e) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
             {savedSuccess ? (
               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
                 <CheckCircle className="w-4 h-4" />
-                Pengaturan profil sekolah berhasil disimpan!
+                Pengaturan profil sekolah berhasil disimpan dan disinkronkan ke Cloud!
               </span>
-            ) : <div />}
+            ) : (
+              <span className="text-[11px] text-slate-500">
+                Tekan tombol simpan untuk menerapkan ke perangkat ini & otomatis memperbarui Cloud.
+              </span>
+            )}
             <button
               type="submit"
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all"
+              disabled={cloudSyncLoading}
+              className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              Simpan Profil Sekolah
+              {cloudSyncLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <CloudUpload className="w-4 h-4" />
+              )}
+              <span>Simpan & Sebarkan Pengaturan</span>
             </button>
           </div>
         </form>
@@ -1064,6 +1475,8 @@ function handleAllRequests(e) {
           </button>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };

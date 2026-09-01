@@ -9,7 +9,10 @@ import {
   saveSettings,
   getUniqueClasses,
   fetchStudentsFromGoogleSheet,
+  fetchRemoteSettings,
+  pushSettingsToCloud,
   DEFAULT_GOOGLE_SHEET_STUDENT_URL,
+  DEFAULT_GOOGLE_WEBHOOK_URL,
 } from './utils/storage';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -76,7 +79,67 @@ export default function App() {
     [settings]
   );
 
-  // Load Initial Data from Storage & Auto-Sync from Google Sheets on Mount
+  // Synchronize remote settings from Admin Cloud across all devices
+  const handleSyncRemoteSettings = useCallback(
+    async (showToast = false) => {
+      const currentLocal = loadSettings();
+      const webhookUrl = currentLocal.googleWebhookUrl || DEFAULT_GOOGLE_WEBHOOK_URL;
+      if (!webhookUrl) return { success: false };
+
+      try {
+        const res = await fetchRemoteSettings(webhookUrl);
+        if (res.success && res.settings) {
+          const remote = res.settings;
+          const local = loadSettings();
+
+          // Check if remote settings differ from local
+          const hasChanges =
+            (remote.schoolName && remote.schoolName !== local.schoolName) ||
+            (remote.alamat && remote.alamat !== local.alamat) ||
+            (remote.kepalaSekolah && remote.kepalaSekolah !== local.kepalaSekolah) ||
+            (remote.nipKepalaSekolah && remote.nipKepalaSekolah !== local.nipKepalaSekolah) ||
+            (remote.waliKelas && remote.waliKelas !== local.waliKelas) ||
+            (remote.nipWaliKelas && remote.nipWaliKelas !== local.nipWaliKelas) ||
+            (remote.googleSheetStudentUrl && remote.googleSheetStudentUrl !== local.googleSheetStudentUrl) ||
+            (remote.logoUrl && remote.logoUrl !== local.logoUrl);
+
+          if (hasChanges) {
+            const updated: SchoolSettings = {
+              ...local,
+              ...remote,
+              lastRemoteSettingsSyncTime: Date.now(),
+            };
+            setSettings(updated);
+            saveSettings(updated);
+
+            if (showToast) {
+              setSyncStatusNotice({
+                type: 'success',
+                message: 'Pengaturan aplikasi berhasil disinkronkan secara otomatis dari Admin Pusat (Cloud Sync).',
+              });
+              setTimeout(() => setSyncStatusNotice(null), 6000);
+            }
+            return { success: true, updated: true };
+          } else {
+            if (showToast) {
+              setSyncStatusNotice({
+                type: 'info',
+                message: 'Pengaturan perangkat sudah sinkron dengan Admin Pusat.',
+              });
+              setTimeout(() => setSyncStatusNotice(null), 5000);
+            }
+            return { success: true, updated: false };
+          }
+        }
+      } catch (err) {
+        console.warn('Remote sync check error:', err);
+      }
+      return { success: false, updated: false };
+    },
+    []
+  );
+
+  // Load Initial Data from Storage & Auto-Sync from Google Sheets & Remote Cloud Settings on Mount
   useEffect(() => {
     const localStudents = loadStudents();
     const localAttendance = loadAttendance();
@@ -85,6 +148,9 @@ export default function App() {
     setStudents(localStudents);
     setAttendanceRecords(localAttendance);
     setSettings(localSettings);
+
+    // Initial sync of remote settings (Cloud Sync)
+    handleSyncRemoteSettings(false);
 
     // If local storage is empty OR on initial startup, automatically pull latest official Google Sheet data
     const runInitialSync = async () => {
@@ -121,7 +187,30 @@ export default function App() {
     };
 
     runInitialSync();
-  }, []);
+  }, [handleSyncRemoteSettings]);
+
+  // Periodic background check & on-focus check for remote settings updates
+  useEffect(() => {
+    const onFocus = () => {
+      handleSyncRemoteSettings(false);
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleSyncRemoteSettings(false);
+      }
+    });
+
+    // Periodic check every 60 seconds
+    const interval = setInterval(() => {
+      handleSyncRemoteSettings(false);
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
+  }, [handleSyncRemoteSettings]);
 
   // Listen to Storage update events for multi-tab or instant sync
   useEffect(() => {
@@ -305,6 +394,7 @@ export default function App() {
             onClearAttendanceOnly={handleClearAttendanceOnly}
             onClearAll={handleClearAll}
             onSyncGoogleSheet={handleSyncGoogleSheet}
+            onSyncRemoteSettings={handleSyncRemoteSettings}
             isSyncingSheet={isSyncingSheet}
           />
         )}

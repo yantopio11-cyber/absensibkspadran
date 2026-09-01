@@ -35,6 +35,8 @@ export interface SchoolSettings {
   googleSheetStudentUrl: string;
   autoSync: boolean;
   lastStudentSyncTime?: number;
+  lastRemoteSettingsSyncTime?: number;
+  enableRemoteSync?: boolean;
 }
 
 export type TabType = 'kelola_kelas' | 'input_absensi' | 'rekap_absensi' | 'pengaturan';

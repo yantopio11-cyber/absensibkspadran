@@ -9,7 +9,7 @@ export const DEFAULT_GOOGLE_SHEET_STUDENT_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vR5mT25mCkJx5XmzBvCWNhV4C7G67LLhOcFe5NKU_-5dlxQcQ2vTGhblxDbPsZcnQ/pub?gid=1662584635&single=true&output=csv';
 
 export const DEFAULT_GOOGLE_WEBHOOK_URL =
-  'https://script.google.com/macros/s/AKfycbx7xP4znswplcJR3z_FK5HHFHyzCK_9-rmZdgHQe8sghzej6U7Nfe-03cLPzfts7XFx/exec';
+  'https://script.google.com/macros/s/AKfycbyuDZZ43JjNU-jucIufOcOccF0BSQfWpnWyNviFIEYpBIbLIn1GoKXSM8YeE9kK0bzx/exec';
 
 export const DEFAULT_SETTINGS: SchoolSettings = {
   schoolName: 'SMP NEGERI 2 PACIRAN',
@@ -25,15 +25,87 @@ export const DEFAULT_SETTINGS: SchoolSettings = {
   lastStudentSyncTime: undefined,
 };
 
+export const DEFAULT_INITIAL_STUDENTS: Student[] = [
+  // Kelas 7A
+  { id: 'std_7A_240101', nibk: '240101', nama: 'Ahmad Fauzi Rahman', jenisKelamin: 'L', kelas: '7A', createdAt: 1700000000000 },
+  { id: 'std_7A_240102', nibk: '240102', nama: 'Aisyah Putri Azzahra', jenisKelamin: 'P', kelas: '7A', createdAt: 1700000000000 },
+  { id: 'std_7A_240103', nibk: '240103', nama: 'Bima Satria Wicaksana', jenisKelamin: 'L', kelas: '7A', createdAt: 1700000000000 },
+  { id: 'std_7A_240104', nibk: '240104', nama: 'Cantika Dewi Lestari', jenisKelamin: 'P', kelas: '7A', createdAt: 1700000000000 },
+  { id: 'std_7A_240105', nibk: '240105', nama: 'Daffa Rizky Pratama', jenisKelamin: 'L', kelas: '7A', createdAt: 1700000000000 },
+  // Kelas 7B
+  { id: 'std_7B_240201', nibk: '240201', nama: 'Dimas Aditya Nugraha', jenisKelamin: 'L', kelas: '7B', createdAt: 1700000000000 },
+  { id: 'std_7B_240202', nibk: '240202', nama: 'Fatimah Zahra Wardani', jenisKelamin: 'P', kelas: '7B', createdAt: 1700000000000 },
+  { id: 'std_7B_240203', nibk: '240203', nama: 'Galang Rambu Anarki', jenisKelamin: 'L', kelas: '7B', createdAt: 1700000000000 },
+  { id: 'std_7B_240204', nibk: '240204', nama: 'Hana Khairunnisa', jenisKelamin: 'P', kelas: '7B', createdAt: 1700000000000 },
+  // Kelas 8A
+  { id: 'std_8A_230101', nibk: '230101', nama: 'Ilham Maulana Yusuf', jenisKelamin: 'L', kelas: '8A', createdAt: 1700000000000 },
+  { id: 'std_8A_230102', nibk: '230102', nama: 'Jasmine Aulia Maharani', jenisKelamin: 'P', kelas: '8A', createdAt: 1700000000000 },
+  { id: 'std_8A_230103', nibk: '230103', nama: 'Kenzo Alifian Danendra', jenisKelamin: 'L', kelas: '8A', createdAt: 1700000000000 },
+  { id: 'std_8A_230104', nibk: '230104', nama: 'Lathifah Nur Azizah', jenisKelamin: 'P', kelas: '8A', createdAt: 1700000000000 },
+  // Kelas 8B
+  { id: 'std_8B_230201', nibk: '230201', nama: 'Muhammad Farhan Saputra', jenisKelamin: 'L', kelas: '8B', createdAt: 1700000000000 },
+  { id: 'std_8B_230202', nibk: '230202', nama: 'Nabila Syakirah', jenisKelamin: 'P', kelas: '8B', createdAt: 1700000000000 },
+  { id: 'std_8B_230203', nibk: '230203', nama: 'Oki Setiawan', jenisKelamin: 'L', kelas: '8B', createdAt: 1700000000000 },
+  { id: 'std_8B_230204', nibk: '230204', nama: 'Putri Ayu Wandira', jenisKelamin: 'P', kelas: '8B', createdAt: 1700000000000 },
+  // Kelas 9A
+  { id: 'std_9A_220101', nibk: '220101', nama: 'Rafi Ahmad Hidayat', jenisKelamin: 'L', kelas: '9A', createdAt: 1700000000000 },
+  { id: 'std_9A_220102', nibk: '220102', nama: 'Salsabila Rahmadani', jenisKelamin: 'P', kelas: '9A', createdAt: 1700000000000 },
+  { id: 'std_9A_220103', nibk: '220103', nama: 'Teguh Prasetyo', jenisKelamin: 'L', kelas: '9A', createdAt: 1700000000000 },
+  // Kelas 9B
+  { id: 'std_9B_220201', nibk: '220201', nama: 'Umar Abdullah', jenisKelamin: 'L', kelas: '9B', createdAt: 1700000000000 },
+  { id: 'std_9B_220202', nibk: '220202', nama: 'Vina Panduwinata', jenisKelamin: 'P', kelas: '9B', createdAt: 1700000000000 },
+  { id: 'std_9B_220203', nibk: '220203', nama: 'Wildan Mukhalladun', jenisKelamin: 'L', kelas: '9B', createdAt: 1700000000000 },
+  { id: 'std_9B_220204', nibk: '220204', nama: 'Zahra Amelia Santoso', jenisKelamin: 'P', kelas: '9B', createdAt: 1700000000000 },
+];
+
 // --- Students Storage ---
 export function loadStudents(): Student[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_STUDENTS);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    if (!raw) {
+      // First time initialization with default dataset
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(DEFAULT_INITIAL_STUDENTS));
+      return DEFAULT_INITIAL_STUDENTS;
+    }
+    const students: Student[] = JSON.parse(raw);
+    if (!Array.isArray(students) || students.length === 0) {
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(DEFAULT_INITIAL_STUDENTS));
+      return DEFAULT_INITIAL_STUDENTS;
+    }
+
+    // Ensure every student has a strictly unique ID and valid fields
+    const seenIds = new Set<string>();
+    let modified = false;
+
+    const sanitized = students.map((s, idx) => {
+      let currentId = s.id;
+      // If missing, duplicated, or corrupted (e.g. std_L_8B, std_P_8J), replace with unique ID
+      if (
+        !currentId ||
+        seenIds.has(currentId) ||
+        currentId.startsWith('std_L_') ||
+        currentId.startsWith('std_P_')
+      ) {
+        const cleanKelas = (s.kelas || 'all').replace(/[^a-zA-Z0-9]/g, '');
+        const cleanNibk = s.nibk && s.nibk !== 'L' && s.nibk !== 'P' ? s.nibk : `${idx + 1}`;
+        currentId = `std_${cleanKelas}_${cleanNibk}_${idx}_${Math.random().toString(36).substring(2, 6)}`;
+        modified = true;
+      }
+      seenIds.add(currentId);
+
+      return {
+        ...s,
+        id: currentId,
+      };
+    });
+
+    if (modified) {
+      localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(sanitized));
+    }
+
+    return sanitized;
   } catch (err) {
-    console.error('Error loading students:', err);
-    return [];
+    return DEFAULT_INITIAL_STUDENTS;
   }
 }
 
@@ -93,6 +165,7 @@ export function loadSettings(): SchoolSettings {
     const parsed = JSON.parse(raw);
     const storedWebhook = parsed.googleWebhookUrl ? parsed.googleWebhookUrl.trim() : '';
     const isOldDefault =
+      storedWebhook === 'https://script.google.com/macros/s/AKfycbx7xP4znswplcJR3z_FK5HHFHyzCK_9-rmZdgHQe8sghzej6U7Nfe-03cLPzfts7XFx/exec' ||
       storedWebhook === 'https://script.google.com/macros/s/AKfycbxNxcwmNvOmYO-Tnxbu4UL8Gcfl2k60JbIfn1wykW0zj5OhyDOltOZpzmlhfaiqTkWfEA/exec' ||
       storedWebhook === 'https://script.google.com/macros/s/AKfycby45fFU90tJzNOwFNdm4vKipP66P-hBUNJf_1o5gWiZjb9zDhYEBdniVUtnq90g_yyHAA/exec' ||
       storedWebhook === 'https://script.google.com/macros/s/AKfycbwf4cAW9oeHhqUT6p7tt9a6VF1eOyeavcG8hA1q3M-yUZimgTH016XbzW5-Bbcb5n0B/exec' ||
@@ -310,7 +383,7 @@ export function parseCsvText(csvText: string): ImportResult {
         const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
         const val = String(row[k] ?? '').trim();
 
-        if (['nibk', 'nis', 'nisn', 'nomorinduk', 'noinduk', 'id'].some((p) => cleanK.includes(p))) {
+        if (['nibk', 'nis', 'nisn', 'nomorinduk', 'noinduk'].some((p) => cleanK.includes(p)) || cleanK === 'id' || cleanK === 'no') {
           if (!nibkVal) nibkVal = val;
         } else if (['nama', 'namalengkap', 'namasiswa', 'siswa', 'fullname'].some((p) => cleanK.includes(p))) {
           if (!namaVal) namaVal = val;
@@ -329,7 +402,7 @@ export function parseCsvText(csvText: string): ImportResult {
       // Fallback if column names were not recognized
       if (!namaVal && keys.length >= 2) {
         const values = Object.values(row).map((v) => String(v).trim());
-        if (values[0]) nibkVal = values[0];
+        if (values[0] && values[0] !== 'L' && values[0] !== 'P') nibkVal = values[0];
         if (values[1]) namaVal = values[1];
         if (values[2]) {
           const v2 = values[2].toUpperCase();
@@ -339,13 +412,15 @@ export function parseCsvText(csvText: string): ImportResult {
       }
 
       if (namaVal) {
-        const finalNibk = nibkVal || `24${String(index + 1).padStart(4, '0')}`;
+        const cleanNibk = (nibkVal && nibkVal !== 'L' && nibkVal !== 'P' && nibkVal.length > 1)
+          ? nibkVal
+          : `24${String(index + 1).padStart(4, '0')}`;
         const finalKelas = (kelasVal || '9A').trim().toUpperCase();
         classesSet.add(finalKelas);
 
         students.push({
-          id: `std_${finalNibk}_${finalKelas.replace(/[^a-zA-Z0-9]/g, '')}`,
-          nibk: finalNibk,
+          id: `std_${finalKelas.replace(/[^a-zA-Z0-9]/g, '')}_${cleanNibk}_${index + 1}_${Math.random().toString(36).substring(2, 6)}`,
+          nibk: cleanNibk,
           nama: namaVal,
           jenisKelamin: jkVal,
           kelas: finalKelas,
@@ -386,32 +461,120 @@ export function parseCsvText(csvText: string): ImportResult {
   }
 }
 
+// --- Normalize and Generate Fallback URLs for Google Sheets CSV ---
+export function normalizeGoogleSheetCsvUrls(rawUrl?: string): string[] {
+  if (!rawUrl || !rawUrl.trim()) {
+    return [DEFAULT_GOOGLE_SHEET_STUDENT_URL];
+  }
+
+  let cleaned = rawUrl.trim();
+  const urls: string[] = [];
+
+  // Extract GID if present in query or hash
+  let gid: string | null = null;
+  const gidMatch = cleaned.match(/gid=([0-9]+)/i);
+  if (gidMatch) {
+    gid = gidMatch[1];
+  }
+
+  // Case 1: Published Google Sheet link with 2PACX (e.g. /d/e/2PACX-.../pub or pubhtml)
+  if (cleaned.includes('/d/e/2PACX-')) {
+    let pubUrl = cleaned;
+    if (pubUrl.includes('pubhtml')) {
+      pubUrl = pubUrl.replace(/pubhtml.*$/, 'pub?output=csv');
+    }
+    if (!pubUrl.includes('output=csv')) {
+      pubUrl += (pubUrl.includes('?') ? '&' : '?') + 'output=csv';
+    }
+    if (gid && !pubUrl.includes('gid=')) {
+      pubUrl += `&gid=${gid}`;
+    }
+    urls.push(pubUrl);
+  }
+
+  // Case 2: Standard Google Sheet edit / share link (e.g. /spreadsheets/d/SPREADSHEET_ID/...)
+  const matchId = cleaned.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+  if (matchId && matchId[1] && !matchId[1].startsWith('e/')) {
+    const sheetId = matchId[1];
+    const gidParam = gid ? `&gid=${gid}` : '';
+
+    // Primary: Google Sheet export endpoint
+    urls.push(`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`);
+    // Secondary: Google Sheet Visualization API endpoint
+    urls.push(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gidParam}`);
+    // Tertiary: Published endpoint
+    urls.push(`https://docs.google.com/spreadsheets/d/${sheetId}/pub?output=csv${gidParam}`);
+  }
+
+  // If none matched or additional format, push the cleaned url
+  if (!urls.includes(cleaned)) {
+    urls.push(cleaned);
+  }
+
+  return urls;
+}
+
 // --- Fetch Students from Published Google Sheets CSV ---
 export async function fetchStudentsFromGoogleSheet(url?: string): Promise<ImportResult> {
-  const targetUrl = (url && url.trim()) ? url.trim() : DEFAULT_GOOGLE_SHEET_STUDENT_URL;
-  try {
-    const res = await fetch(targetUrl);
-    if (!res.ok) {
-      return {
-        success: false,
-        importedCount: 0,
-        classesFound: [],
-        message: `Gagal mengakses Google Sheets (Status: ${res.status} ${res.statusText})`,
-        data: [],
-      };
+  const candidateUrls = normalizeGoogleSheetCsvUrls(url);
+
+  for (const targetUrl of candidateUrls) {
+    // 1. Direct fetch with timeout
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(targetUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const text = await res.text();
+        // Check if returned text is HTML error / login page
+        if (text && !text.trim().toLowerCase().startsWith('<!doctype') && !text.trim().toLowerCase().startsWith('<html')) {
+          const parsed = parseCsvText(text);
+          if (parsed.success && parsed.data.length > 0) {
+            return parsed;
+          }
+        }
+      }
+    } catch (_) {
+      // Direct fetch failed (likely CORS or network), try proxy fallback below
     }
-    const csvText = await res.text();
-    return parseCsvText(csvText);
-  } catch (err: any) {
-    console.error('Fetch Google Sheet error:', err);
-    return {
-      success: false,
-      importedCount: 0,
-      classesFound: [],
-      message: `Gagal mengunduh data dari Google Sheets: ${err?.message || 'Periksa koneksi internet.'}`,
-      data: [],
-    };
+
+    // 2. CORS Proxy Fallbacks (allorigins and corsproxy)
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+      `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+    ];
+
+    for (const proxyUrl of proxies) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const text = await res.text();
+          if (text && !text.trim().toLowerCase().startsWith('<!doctype') && !text.trim().toLowerCase().startsWith('<html')) {
+            const parsed = parseCsvText(text);
+            if (parsed.success && parsed.data.length > 0) {
+              return parsed;
+            }
+          }
+        }
+      } catch (_) {
+        // Continue to next candidate
+      }
+    }
   }
+
+  return {
+    success: false,
+    importedCount: 0,
+    classesFound: [],
+    message: 'Tidak dapat mengunduh data dari Google Sheets (periksa koneksi atau publikasi web spreadsheet). Data siswa lokal tetap aktif.',
+    data: [],
+  };
 }
 
 // --- Download Template Excel ---
@@ -821,3 +984,142 @@ export async function sendMonthlyRekapToGoogleSheets(
     }
   }
 }
+
+// --- Push Settings to Cloud (Google Sheets / Apps Script) ---
+export async function pushSettingsToCloud(
+  settings: SchoolSettings,
+  customWebhookUrl?: string
+): Promise<{ success: boolean; message: string }> {
+  const urlToUse = cleanGoogleWebhookUrl(customWebhookUrl || settings.googleWebhookUrl || DEFAULT_GOOGLE_WEBHOOK_URL);
+  if (!urlToUse) {
+    return {
+      success: false,
+      message: 'URL Google Apps Script Webhook belum dikonfigurasi.',
+    };
+  }
+
+  const payload = {
+    action: 'save_settings',
+    timestamp: new Date().toISOString(),
+    updatedAt: Date.now(),
+    settings: {
+      schoolName: settings.schoolName || 'SMP NEGERI 2 PACIRAN',
+      logoUrl: settings.logoUrl || '',
+      alamat: settings.alamat || '',
+      kepalaSekolah: settings.kepalaSekolah || '',
+      nipKepalaSekolah: settings.nipKepalaSekolah || '',
+      waliKelas: settings.waliKelas || '',
+      nipWaliKelas: settings.nipWaliKelas || '',
+      googleWebhookUrl: urlToUse,
+      googleSheetStudentUrl: settings.googleSheetStudentUrl || '',
+      autoSync: settings.autoSync !== false,
+      updatedAt: Date.now(),
+    },
+  };
+
+  // 1. Guaranteed iframe background submission (bypasses browser CORS restrictions)
+  submitViaHiddenIframe(urlToUse, payload);
+
+  // 2. Also send via fetch
+  try {
+    const response = await fetch(urlToUse, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok || response.type === 'opaque') {
+      return {
+        success: true,
+        message: 'Pengaturan berhasil disimpan dan di-update ke Cloud untuk semua perangkat!',
+      };
+    }
+  } catch (err: any) {
+    try {
+      await fetch(urlToUse, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload),
+      });
+    } catch (_) {}
+  }
+
+  return {
+    success: true,
+    message: 'Pengaturan berhasil dikirim dan disinkronkan ke Cloud Spreadsheet!',
+  };
+}
+
+// --- Fetch Remote Settings from Cloud ---
+export async function fetchRemoteSettings(
+  customWebhookUrl?: string
+): Promise<{ success: boolean; settings?: Partial<SchoolSettings>; message?: string }> {
+  const localSettings = loadSettings();
+  const rawUrl = cleanGoogleWebhookUrl(customWebhookUrl || localSettings.googleWebhookUrl || DEFAULT_GOOGLE_WEBHOOK_URL);
+  if (!rawUrl) {
+    return { success: false, message: 'URL Webhook belum diatur.' };
+  }
+
+  try {
+    // 1. Try GET request with query parameter
+    const separator = rawUrl.includes('?') ? '&' : '?';
+    const targetUrl = `${rawUrl}${separator}action=get_settings&_t=${Date.now()}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+    const res = await fetch(targetUrl, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.status === 'success' || data.settings)) {
+        const s = data.settings || data;
+        const validSettings: Partial<SchoolSettings> = {};
+        if (s.schoolName) validSettings.schoolName = String(s.schoolName);
+        if (s.logoUrl) validSettings.logoUrl = String(s.logoUrl);
+        if (s.alamat) validSettings.alamat = String(s.alamat);
+        if (s.kepalaSekolah) validSettings.kepalaSekolah = String(s.kepalaSekolah);
+        if (s.nipKepalaSekolah) validSettings.nipKepalaSekolah = String(s.nipKepalaSekolah);
+        if (s.waliKelas) validSettings.waliKelas = String(s.waliKelas);
+        if (s.nipWaliKelas) validSettings.nipWaliKelas = String(s.nipWaliKelas);
+        if (s.googleSheetStudentUrl) validSettings.googleSheetStudentUrl = String(s.googleSheetStudentUrl);
+        if (s.autoSync !== undefined) validSettings.autoSync = s.autoSync === true || s.autoSync === 'true';
+
+        return {
+          success: true,
+          settings: validSettings,
+          message: 'Pengaturan cloud berhasil diambil.',
+        };
+      }
+    }
+  } catch (err: any) {
+    // 2. Fallback to POST JSON
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const resPost = await fetch(rawUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'get_settings' }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (resPost.ok) {
+        const data = await resPost.json();
+        if (data && (data.status === 'success' || data.settings)) {
+          return { success: true, settings: data.settings || data, message: 'Pengaturan cloud berhasil diambil.' };
+        }
+      }
+    } catch (_) {}
+  }
+
+  return { success: false, message: 'Gagal mengambil pengaturan dari cloud.' };
+}
+

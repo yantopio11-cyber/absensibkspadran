@@ -469,7 +469,7 @@ export const InputAbsensiTab: React.FC<InputAbsensiTabProps> = ({
 
               return (
                 <div
-                  key={std.id}
+                  key={`input-std-${std.id || std.nibk}-${idx}`}
                   className={`p-3 sm:p-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3.5 ${
                     currentStatus === 'H'
                       ? 'bg-white border-slate-200 hover:border-emerald-300'
