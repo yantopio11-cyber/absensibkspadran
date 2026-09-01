@@ -231,21 +231,100 @@ function handleAllRequests(e) {
     }
 
     if (!rawData) {
-      return ContentService.createTextOutput(
-        JSON.stringify({ status: "success", message: "Web App Absensi SMPN 2 Paciran Aktif & Siap Digunakan!" })
-      ).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var data;
-    try {
-      data = JSON.parse(rawData);
-    } catch (parseErr) {
-      data = JSON.parse(decodeURIComponent(rawData));
+      if (e && e.parameter && e.parameter.action) {
+        data = { action: e.parameter.action, kelas: e.parameter.kelas, tahun: e.parameter.tahun, bulan: e.parameter.bulan };
+      } else {
+        return ContentService.createTextOutput(
+          JSON.stringify({ status: "success", message: "Web App Absensi SMPN 2 Paciran Aktif & Siap Digunakan!" })
+        ).setMimeType(ContentService.MimeType.JSON);
+      }
+    } else {
+      try {
+        data = JSON.parse(rawData);
+      } catch (parseErr) {
+        data = JSON.parse(decodeURIComponent(rawData));
+      }
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (!ss) {
       throw new Error("Spreadsheet tidak ditemukan. Pastikan Apps Script dibuat melalui menu Ekstensi > Apps Script di Google Sheets Anda.");
+    }
+
+    // =========================================================================
+    // 0. TARIK SEMUA DATA ABSENSI LIVE (UNTUK SINKRONISASI MULTI-PERANGKAT HP/LAPTOP)
+    // =========================================================================
+    if (data && (data.action === "get_all_attendance" || data.action === "get_attendance")) {
+      var allRecords = [];
+      var masterSheet = ss.getSheetByName("DATABASE_ABSENSI_ALL");
+      
+      if (masterSheet && masterSheet.getLastRow() > 1) {
+        var values = masterSheet.getRange(2, 1, masterSheet.getLastRow() - 1, 8).getValues();
+        for (var m = 0; m < values.length; m++) {
+          var rowM = values[m];
+          var nibkVal = String(rowM[1] || "").replace(/^'/, "").trim();
+          var namaVal = String(rowM[2] || "").trim();
+          var kelasVal = String(rowM[3] || "").trim();
+          var tanggalVal = String(rowM[4] || "").trim();
+          var statusVal = String(rowM[5] || "").trim().toUpperCase();
+          var catatanVal = String(rowM[6] || "").trim();
+          
+          if (tanggalVal && statusVal) {
+            // Filter kelas if requested
+            if (data.kelas && data.kelas !== "ALL" && kelasVal !== data.kelas) continue;
+            allRecords.push({
+              nibk: nibkVal,
+              nama: namaVal,
+              kelas: kelasVal,
+              tanggal: tanggalVal,
+              status: statusVal,
+              catatan: catatanVal
+            });
+          }
+        }
+      } else {
+        // Fallback: cari dari sheet absensi bulanan yang ada
+        var sheets = ss.getSheets();
+        for (var sIdx = 0; sIdx < sheets.length; sIdx++) {
+          var sh = sheets[sIdx];
+          var shName = sh.getName();
+          if (shName.indexOf("Absensi_") === 0 || shName.indexOf("Januari") === 0 || shName.indexOf("Februari") === 0 || 
+              shName.indexOf("Maret") === 0 || shName.indexOf("April") === 0 || shName.indexOf("Mei") === 0 || 
+              shName.indexOf("Juni") === 0 || shName.indexOf("Juli") === 0 || shName.indexOf("Agustus") === 0 || 
+              shName.indexOf("September") === 0 || shName.indexOf("Oktober") === 0 || shName.indexOf("November") === 0 || 
+              shName.indexOf("Desember") === 0) {
+            if (sh.getLastRow() > 1 && sh.getLastColumn() >= 6) {
+              var sValues = sh.getRange(2, 1, sh.getLastRow() - 1, Math.min(sh.getLastColumn(), 7)).getValues();
+              for (var rowIdx = 0; rowIdx < sValues.length; rowIdx++) {
+                var sRow = sValues[rowIdx];
+                var sNibk = String(sRow[1] || "").replace(/^'/, "").trim();
+                var sNama = String(sRow[2] || "").trim();
+                var sKelas = String(sRow[3] || "").trim();
+                var sTgl = String(sRow[4] || "").trim();
+                var sSt = String(sRow[5] || "").trim().toUpperCase();
+                var sCat = String(sRow[6] || "").trim();
+                if (sTgl && ["H", "S", "I", "A"].indexOf(sSt) >= 0) {
+                  if (data.kelas && data.kelas !== "ALL" && sKelas !== data.kelas) continue;
+                  allRecords.push({
+                    nibk: sNibk,
+                    nama: sNama,
+                    kelas: sKelas,
+                    tanggal: sTgl,
+                    status: sSt,
+                    catatan: sCat
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        count: allRecords.length,
+        records: allRecords
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     // =========================================================================
@@ -678,6 +757,47 @@ function handleAllRequests(e) {
 
       if (rows.length > 0) {
         logSheet.getRange(logSheet.getLastRow() + 1, 1, rows.length, 7).setValues(rows);
+      }
+
+      // Maintain Master Hub: DATABASE_ABSENSI_ALL (Deduplicated per NIBK & Tanggal for seamless multi-device live sync)
+      var masterSheet = ss.getSheetByName("DATABASE_ABSENSI_ALL");
+      if (!masterSheet) {
+        masterSheet = ss.insertSheet("DATABASE_ABSENSI_ALL");
+        masterSheet.appendRow(["KEY", "NIBK", "Nama Lengkap", "Kelas", "Tanggal", "Status", "Catatan", "Waktu Simpan"]);
+        masterSheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
+      }
+
+      var existingMap = {};
+      var lastRowMaster = masterSheet.getLastRow();
+      if (lastRowMaster > 1) {
+        var keys = masterSheet.getRange(2, 1, lastRowMaster - 1, 1).getValues();
+        for (var km = 0; km < keys.length; km++) {
+          existingMap[String(keys[km][0])] = km + 2; // baris row index
+        }
+      }
+
+      for (var kr = 0; kr < data.records.length; kr++) {
+        var rec = data.records[kr];
+        var itemKey = (rec.nibk || rec.nama || "") + "_" + (rec.tanggal || "");
+        var masterRowData = [
+          itemKey,
+          "'" + (rec.nibk || ""),
+          rec.nama || "",
+          rec.kelas || "",
+          rec.tanggal || "",
+          rec.status || "",
+          rec.catatan || "",
+          rec.waktuUpdate || new Date().toLocaleString("id-ID")
+        ];
+
+        if (existingMap[itemKey]) {
+          // Update baris yang sudah ada
+          masterSheet.getRange(existingMap[itemKey], 1, 1, 8).setValues([masterRowData]);
+        } else {
+          // Append baris baru
+          masterSheet.appendRow(masterRowData);
+          existingMap[itemKey] = masterSheet.getLastRow();
+        }
       }
     }
 

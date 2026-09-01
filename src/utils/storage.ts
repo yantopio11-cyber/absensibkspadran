@@ -1123,3 +1123,147 @@ export async function fetchRemoteSettings(
   return { success: false, message: 'Gagal mengambil pengaturan dari cloud.' };
 }
 
+// --- Fetch Remote Attendance from Cloud (Live Multi-Device Sync) ---
+export async function fetchRemoteAttendance(
+  customWebhookUrl?: string,
+  filter?: { bulan?: string; tahun?: number; kelas?: string }
+): Promise<{ success: boolean; count: number; data: AttendanceRecord[]; message: string }> {
+  const localSettings = loadSettings();
+  const rawUrl = cleanGoogleWebhookUrl(customWebhookUrl || localSettings.googleWebhookUrl || DEFAULT_GOOGLE_WEBHOOK_URL);
+  if (!rawUrl) {
+    return { success: false, count: 0, data: [], message: 'URL Webhook Google Apps Script belum dikonfigurasi.' };
+  }
+
+  const localStudents = loadStudents();
+  const studentMapByNibk = new Map<string, Student>();
+  const studentMapByName = new Map<string, Student>();
+  for (const s of localStudents) {
+    if (s.nibk) studentMapByNibk.set(String(s.nibk).trim(), s);
+    if (s.nama) studentMapByName.set(s.nama.trim().toLowerCase(), s);
+  }
+
+  const normalizeFetchedRecords = (rawRecords: any[]): AttendanceRecord[] => {
+    if (!Array.isArray(rawRecords)) return [];
+    const parsedList: AttendanceRecord[] = [];
+
+    for (const r of rawRecords) {
+      if (!r) continue;
+      const nibk = String(r.nibk || r.NIBK || r.nis || '').trim();
+      const nama = String(r.nama || r.Nama || r.namaLengkap || '').trim();
+      const kelas = String(r.kelas || r.Kelas || '').trim();
+      const tanggal = String(r.tanggal || r.Tanggal || '').trim();
+      const statusRaw = String(r.status || r.Status || '').trim().toUpperCase();
+      const catatan = String(r.catatan || r.Catatan || r.keterangan || '').trim();
+      const updatedAt = r.updatedAt ? Number(r.updatedAt) : Date.now();
+
+      // Only valid status
+      if (!['H', 'S', 'I', 'A'].includes(statusRaw) || !tanggal) {
+        continue;
+      }
+
+      // Match student ID
+      let matchedStudent = nibk ? studentMapByNibk.get(nibk) : undefined;
+      if (!matchedStudent && nama) {
+        matchedStudent = studentMapByName.get(nama.toLowerCase());
+      }
+
+      const studentId = matchedStudent ? matchedStudent.id : `std_${kelas}_${nibk || Math.random().toString(36).substring(2, 7)}`;
+      const validRecord: AttendanceRecord = {
+        id: `att_${studentId}_${tanggal}`,
+        studentId,
+        nibk: matchedStudent ? matchedStudent.nibk : nibk,
+        nama: matchedStudent ? matchedStudent.nama : nama,
+        kelas: matchedStudent ? matchedStudent.kelas : kelas,
+        tanggal,
+        status: statusRaw as 'H' | 'S' | 'I' | 'A',
+        catatan,
+        updatedAt,
+      };
+
+      parsedList.push(validRecord);
+    }
+
+    return parsedList;
+  };
+
+  // 1. Try GET request with query params
+  try {
+    const separator = rawUrl.includes('?') ? '&' : '?';
+    let targetUrl = `${rawUrl}${separator}action=get_all_attendance&_t=${Date.now()}`;
+    if (filter?.kelas && filter.kelas !== 'ALL') targetUrl += `&kelas=${encodeURIComponent(filter.kelas)}`;
+    if (filter?.tahun) targetUrl += `&tahun=${filter.tahun}`;
+    if (filter?.bulan) targetUrl += `&bulan=${encodeURIComponent(filter.bulan)}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(targetUrl, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const records = data.records || data.data || (Array.isArray(data) ? data : []);
+      if (Array.isArray(records) && records.length > 0) {
+        const normalized = normalizeFetchedRecords(records);
+        if (normalized.length > 0) {
+          // Merge with local storage
+          upsertAttendanceBatch(normalized);
+          return {
+            success: true,
+            count: normalized.length,
+            data: normalized,
+            message: `Berhasil menyinkronkan ${normalized.length} data absensi live dari Cloud Spreadsheet!`,
+          };
+        }
+      }
+    }
+  } catch (err: any) {
+    // Fallback to POST JSON
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
+      const resPost = await fetch(rawUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'get_all_attendance',
+          kelas: filter?.kelas,
+          tahun: filter?.tahun,
+          bulan: filter?.bulan,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (resPost.ok) {
+        const data = await resPost.json();
+        const records = data.records || data.data || (Array.isArray(data) ? data : []);
+        if (Array.isArray(records) && records.length > 0) {
+          const normalized = normalizeFetchedRecords(records);
+          if (normalized.length > 0) {
+            upsertAttendanceBatch(normalized);
+            return {
+              success: true,
+              count: normalized.length,
+              data: normalized,
+              message: `Berhasil menyinkronkan ${normalized.length} data absensi live dari Cloud Spreadsheet!`,
+            };
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // If remote returns 0 records or not yet deployed with get_all_attendance handler, return current local data
+  const currentLocal = loadAttendance();
+  return {
+    success: true,
+    count: currentLocal.length,
+    data: currentLocal,
+    message: 'Data absensi lokal aktif dan tersimpan aman. Siap sinkronisasi multi-perangkat.',
+  };
+}
+

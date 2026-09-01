@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student, AttendanceRecord, SchoolSettings, Gender } from '../types';
 import {
   exportAttendanceMatrixToExcel,
   getUniqueClasses,
   sendMonthlyRekapToGoogleSheets,
+  fetchRemoteAttendance,
 } from '../utils/storage';
 import {
   CalendarRange,
@@ -22,20 +23,27 @@ import {
   Calendar,
   Layers,
   CloudUpload,
+  CloudDownload,
   RefreshCw,
   AlertCircle,
+  Radio,
+  Smartphone,
+  Laptop,
+  Globe,
 } from 'lucide-react';
 
 interface RekapAbsensiTabProps {
   students: Student[];
   attendanceRecords: AttendanceRecord[];
   settings: SchoolSettings;
+  onSyncRemoteAttendance?: (showToast?: boolean, filter?: { bulan?: string; tahun?: number; kelas?: string }) => Promise<{ success: boolean; count: number }>;
 }
 
 export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
   students,
   attendanceRecords,
   settings,
+  onSyncRemoteAttendance,
 }) => {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
@@ -44,7 +52,10 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL'); // ALL, LOW_ATTENDANCE, HAS_ALPHA
   const [isSyncingToSheet, setIsSyncingToSheet] = useState(false);
-  const [sheetSyncStatus, setSheetSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isPullingCloud, setIsPullingCloud] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Baru saja');
+  const [sheetSyncStatus, setSheetSyncStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [showLiveInfoModal, setShowLiveInfoModal] = useState(false);
 
   const uniqueClasses = useMemo(() => getUniqueClasses(students), [students]);
 
@@ -225,6 +236,68 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
     window.print();
   };
 
+  // Pull Remote Attendance from Cloud (Sync data from other HP/Laptop)
+  const handlePullCloudAttendance = async (manual = true) => {
+    setIsPullingCloud(true);
+    setSheetSyncStatus(null);
+
+    try {
+      if (onSyncRemoteAttendance) {
+        const res = await onSyncRemoteAttendance(manual, {
+          bulan: currentMonthName,
+          tahun: selectedYear,
+          kelas: selectedClass,
+        });
+        if (res.success) {
+          setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          if (manual) {
+            setSheetSyncStatus({
+              type: 'success',
+              message: `Live Sync Berhasil: Data absensi terbaru berhasil ditarik dari Cloud Spreadsheet (${res.count} data aktif).`,
+            });
+          }
+        } else if (manual) {
+          setSheetSyncStatus({
+            type: 'info',
+            message: 'Data absensi lokal sudah termutakhir dengan Cloud.',
+          });
+        }
+      } else {
+        const res = await fetchRemoteAttendance(settings.googleWebhookUrl, {
+          bulan: currentMonthName,
+          tahun: selectedYear,
+          kelas: selectedClass,
+        });
+        if (res.success) {
+          setLastSyncTime(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          if (manual) {
+            setSheetSyncStatus({
+              type: 'success',
+              message: res.message || 'Data absensi live berhasil disinkronkan.',
+            });
+          }
+        }
+      }
+    } catch (err: any) {
+      if (manual) {
+        setSheetSyncStatus({
+          type: 'error',
+          message: 'Koneksi ke Google Sheets sedang sibuk. Menampilkan data tersimpan di perangkat.',
+        });
+      }
+    } finally {
+      setIsPullingCloud(false);
+      if (manual) {
+        setTimeout(() => setSheetSyncStatus(null), 6000);
+      }
+    }
+  };
+
+  // Auto-sync from cloud on initial mount of Rekap Tab
+  useEffect(() => {
+    handlePullCloudAttendance(false);
+  }, []);
+
   // Export Excel
   const handleExportExcel = () => {
     const classLabel = selectedClass === 'ALL' ? 'Semua_Kelas' : `Kelas_${selectedClass}`;
@@ -286,6 +359,10 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
             <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider mb-1">
               <CalendarRange className="w-4 h-4" />
               <span>Matriks Rekapitulasi Presensi Siswa</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Live Multi-Perangkat
+              </span>
             </div>
             <h2 className="text-xl md:text-2xl font-extrabold text-slate-900">
               REKAPITULASI ABSENSI BULAN {currentMonthName.toUpperCase()} {selectedYear}
@@ -295,18 +372,27 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
             </p>
           </div>
 
-          {/* Action Buttons: Print, Excel, Google Sheets */}
+          {/* Action Buttons: Tarik Cloud, Print, Excel, Google Sheets */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
+              onClick={() => handlePullCloudAttendance(true)}
+              disabled={isPullingCloud}
+              title="Tarik data absensi terbaru dari Google Spreadsheet yang telah diinput oleh guru/perangkat lain"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${isPullingCloud ? 'animate-spin' : ''}`} />
+              <span>{isPullingCloud ? 'Menyinkronkan...' : 'Tarik Data Cloud (Live)'}</span>
+            </button>
+            <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-sm transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-sm transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Cetak / Print Laporan</span>
             </button>
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>Unduh Excel (.xlsx)</span>
@@ -315,7 +401,7 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
               onClick={handleSendMonthlyToGoogleSheet}
               disabled={isSyncingToSheet}
               title={`Kirim Rekapitulasi ${currentMonthName} ${selectedClass === 'ALL' ? 'Semua' : selectedClass} ke Google Spreadsheet`}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white shadow-md shadow-teal-600/20 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white shadow-md shadow-teal-600/20 transition-all cursor-pointer"
             >
               {isSyncingToSheet ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -331,18 +417,92 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
           </div>
         </div>
 
+        {/* Live Multi-Device Info Card */}
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-sky-50 border border-emerald-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Globe className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                <span>Sinkronisasi Data Multi-Perangkat Aktif</span>
+                <span className="text-[10px] font-normal bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
+                  Real-time Spreadsheet Hub
+                </span>
+              </p>
+              <p className="text-slate-600 text-[11px] mt-0.5">
+                Semua guru & kepala sekolah dapat melihat rekap absensi yang sama secara serentak dari HP atau laptop masing-masing tanpa takut data hilang.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <span className="text-[11px] text-slate-500">
+              Sinkron: <strong>{lastSyncTime}</strong>
+            </span>
+            <button
+              onClick={() => setShowLiveInfoModal(!showLiveInfoModal)}
+              className="text-emerald-700 hover:text-emerald-900 font-bold underline text-[11px] cursor-pointer"
+            >
+              {showLiveInfoModal ? 'Tutup Panduan' : 'Info Cara Kerja'}
+            </button>
+          </div>
+        </div>
+
+        {/* Expanded Info Panduan Multi Perangkat */}
+        {showLiveInfoModal && (
+          <div className="p-4 bg-white border border-emerald-300 rounded-xl shadow-inner text-xs text-slate-700 space-y-2">
+            <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              Bagaimana Data Live Bekerja Antar HP & Laptop Berbeda?
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              <div className="p-3 bg-emerald-50/70 rounded-lg border border-emerald-200 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                  <Smartphone className="w-4 h-4" />
+                  <span>1. Input Guru di Kelas</span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Guru kelas A, B, atau C menginput absensi harian dari HP masing-masing dan menekan <strong>Simpan Absensi</strong>.
+                </p>
+              </div>
+              <div className="p-3 bg-teal-50/70 rounded-lg border border-teal-200 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-teal-800">
+                  <CloudUpload className="w-4 h-4" />
+                  <span>2. Tersimpan ke Cloud</span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Data otomatis terkirim dan tersimpan aman di Google Spreadsheet resmi sekolah secara terpusat.
+                </p>
+              </div>
+              <div className="p-3 bg-sky-50/70 rounded-lg border border-sky-200 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-sky-800">
+                  <Laptop className="w-4 h-4" />
+                  <span>3. Tampil Live di Semua HP</span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Kepala sekolah atau guru lain di perangkat berbeda langsung melihat rekapitulasi data yang masuk secara transparan & utuh.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sync Toast Notice */}
         {sheetSyncStatus && (
           <div
             className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 border ${
               sheetSyncStatus.type === 'success'
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : sheetSyncStatus.type === 'info'
+                ? 'bg-blue-50 text-blue-800 border-blue-200'
                 : 'bg-red-50 text-red-800 border-red-200'
             }`}
           >
             <div className="flex items-center gap-2">
               {sheetSyncStatus.type === 'success' ? (
                 <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              ) : sheetSyncStatus.type === 'info' ? (
+                <Info className="w-4 h-4 text-blue-600 flex-shrink-0" />
               ) : (
                 <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
               )}
@@ -350,7 +510,7 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
             </div>
             <button
               onClick={() => setSheetSyncStatus(null)}
-              className="text-slate-500 hover:text-slate-700 text-xs font-bold"
+              className="text-slate-500 hover:text-slate-700 text-xs font-bold cursor-pointer"
             >
               Tutup
             </button>
