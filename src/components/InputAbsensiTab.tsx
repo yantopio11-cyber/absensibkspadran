@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Student, AttendanceRecord, AttendanceStatus, SchoolSettings } from '../types';
 import {
   upsertAttendanceBatch,
@@ -81,31 +81,57 @@ export const InputAbsensiTab: React.FC<InputAbsensiTabProps> = ({
     return d.getDay() === 5;
   }, [selectedDate]);
 
+  // Track previous selectedClass and selectedDate to only load stored data when switching class or date
+  const prevSelectionRef = useRef<string>('');
+
   // Synchronize initial attendance state whenever selectedClass, selectedDate or students change
   // RULE: "INPUT ABSENSI PADA WAKTU DIBUKA OTOMATIS PILIHANYA ADALAH HADIR"
   useEffect(() => {
     if (!selectedClass || classStudents.length === 0) return;
 
-    const initialMap: { [studentId: string]: AttendanceStatus } = {};
-    const initialNotes: { [studentId: string]: string } = {};
+    const currentSelectionKey = `${selectedClass}___${selectedDate}`;
 
-    classStudents.forEach((student) => {
-      // Check if there is an existing saved attendance record for this student on this date
-      const record = attendanceRecords.find(
-        (r) => r.studentId === student.id && r.tanggal === selectedDate
-      );
+    // Only re-initialize attendance state from storage if class or date changed
+    if (prevSelectionRef.current !== currentSelectionKey) {
+      prevSelectionRef.current = currentSelectionKey;
 
-      if (record && record.status) {
-        initialMap[student.id] = record.status;
-        if (record.catatan) initialNotes[student.id] = record.catatan;
-      } else {
-        // AUTOMATICALLY DEFAULT TO 'H' (HADIR)
-        initialMap[student.id] = 'H';
-      }
-    });
+      const initialMap: { [studentId: string]: AttendanceStatus } = {};
+      const initialNotes: { [studentId: string]: string } = {};
 
-    setAttendanceState(initialMap);
-    setNotes(initialNotes);
+      classStudents.forEach((student) => {
+        // Check if there is an existing saved attendance record for this student on this date
+        const record = attendanceRecords.find(
+          (r) => (r.studentId === student.id || (r.nibk && r.nibk === student.nibk)) && r.tanggal === selectedDate
+        );
+
+        if (record && record.status) {
+          initialMap[student.id] = record.status;
+          if (record.catatan) initialNotes[student.id] = record.catatan;
+        } else {
+          // AUTOMATICALLY DEFAULT TO 'H' (HADIR)
+          initialMap[student.id] = 'H';
+        }
+      });
+
+      setAttendanceState(initialMap);
+      setNotes(initialNotes);
+    } else {
+      // If student list modified while on same class/date, ensure all students have a valid status without wiping user's S/I/A edits
+      setAttendanceState((prev) => {
+        let hasChanges = false;
+        const updated = { ...prev };
+        classStudents.forEach((student) => {
+          if (!updated[student.id]) {
+            const record = attendanceRecords.find(
+              (r) => (r.studentId === student.id || (r.nibk && r.nibk === student.nibk)) && r.tanggal === selectedDate
+            );
+            updated[student.id] = record?.status || 'H';
+            hasChanges = true;
+          }
+        });
+        return hasChanges ? updated : prev;
+      });
+    }
   }, [selectedClass, selectedDate, classStudents, attendanceRecords]);
 
   // Change single student status
