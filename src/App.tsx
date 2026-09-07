@@ -10,7 +10,6 @@ import {
   getUniqueClasses,
   fetchStudentsFromGoogleSheet,
   fetchRemoteSettings,
-  fetchRemoteAttendance,
   pushSettingsToCloud,
   DEFAULT_GOOGLE_SHEET_STUDENT_URL,
   DEFAULT_GOOGLE_WEBHOOK_URL,
@@ -78,41 +77,6 @@ export default function App() {
       }
     },
     [settings]
-  );
-
-  // Synchronize remote attendance records from Cloud across all devices
-  const handleSyncRemoteAttendance = useCallback(
-    async (showToast = false, filter?: { bulan?: string; tahun?: number; kelas?: string }) => {
-      const currentLocal = loadSettings();
-      const webhookUrl = currentLocal.googleWebhookUrl || DEFAULT_GOOGLE_WEBHOOK_URL;
-      if (!webhookUrl) return { success: false, count: 0 };
-
-      try {
-        const res = await fetchRemoteAttendance(webhookUrl, filter);
-        if (res.success && res.data && res.data.length > 0) {
-          const latestAttendance = loadAttendance();
-          setAttendanceRecords(latestAttendance);
-          if (showToast) {
-            setSyncStatusNotice({
-              type: 'success',
-              message: `Live Sync Multi-Perangkat Berhasil: Memuat ${res.data.length} data absensi siswa dari Cloud Spreadsheet.`,
-            });
-            setTimeout(() => setSyncStatusNotice(null), 5000);
-          }
-          return { success: true, count: res.data.length };
-        } else if (showToast) {
-          setSyncStatusNotice({
-            type: 'info',
-            message: 'Data absensi sudah sinkron dengan seluruh perangkat.',
-          });
-          setTimeout(() => setSyncStatusNotice(null), 4000);
-        }
-      } catch (err) {
-        console.warn('Remote attendance sync error:', err);
-      }
-      return { success: false, count: 0 };
-    },
-    []
   );
 
   // Synchronize remote settings from Admin Cloud across all devices
@@ -185,9 +149,8 @@ export default function App() {
     setAttendanceRecords(localAttendance);
     setSettings(localSettings);
 
-    // Initial sync of remote settings & attendance (Cloud Sync)
+    // Initial sync of remote settings (Cloud Sync)
     handleSyncRemoteSettings(false);
-    handleSyncRemoteAttendance(false);
 
     // If local storage is empty OR on initial startup, automatically pull latest official Google Sheet data
     const runInitialSync = async () => {
@@ -226,31 +189,28 @@ export default function App() {
     runInitialSync();
   }, [handleSyncRemoteSettings]);
 
-  // Periodic background check & on-focus check for remote settings & attendance updates
+  // Periodic background check & on-focus check for remote settings updates
   useEffect(() => {
     const onFocus = () => {
       handleSyncRemoteSettings(false);
-      handleSyncRemoteAttendance(false);
     };
     window.addEventListener('focus', onFocus);
     window.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         handleSyncRemoteSettings(false);
-        handleSyncRemoteAttendance(false);
       }
     });
 
     // Periodic check every 60 seconds
     const interval = setInterval(() => {
       handleSyncRemoteSettings(false);
-      handleSyncRemoteAttendance(false);
     }, 60000);
 
     return () => {
       window.removeEventListener('focus', onFocus);
       clearInterval(interval);
     };
-  }, [handleSyncRemoteSettings, handleSyncRemoteAttendance]);
+  }, [handleSyncRemoteSettings]);
 
   // Listen to Storage update events for multi-tab or instant sync
   useEffect(() => {
@@ -421,7 +381,6 @@ export default function App() {
             students={students}
             attendanceRecords={attendanceRecords}
             settings={settings}
-            onSyncRemoteAttendance={handleSyncRemoteAttendance}
           />
         )}
 
