@@ -286,6 +286,10 @@ export const RekapAbsensiTab: React.FC<RekapAbsensiTabProps> = ({
             <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs uppercase tracking-wider mb-1">
               <CalendarRange className="w-4 h-4" />
               <span>Matriks Rekapitulasi Presensi Siswa</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Cloud Database Terhubung
+              </span>
             </div>
             <h2 className="text-xl md:text-2xl font-extrabold text-slate-900">
               REKAPITULASI ABSENSI BULAN {currentMonthName.toUpperCase()} {selectedYear}

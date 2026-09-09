@@ -14,6 +14,16 @@ import {
   DEFAULT_GOOGLE_SHEET_STUDENT_URL,
   DEFAULT_GOOGLE_WEBHOOK_URL,
 } from './utils/storage';
+import {
+  saveAttendanceToCloud,
+  clearAttendanceFromCloud,
+  subscribeToCloudAttendance,
+  saveStudentsToCloud,
+  subscribeToCloudStudents,
+  saveSettingsToCloud,
+  subscribeToCloudSettings,
+  syncLocalDataToCloudIfNeeded,
+} from './lib/firebaseSync';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { KelolaKelasTab } from './components/KelolaKelasTab';
@@ -235,16 +245,51 @@ export default function App() {
     };
   }, []);
 
+  // Real-time Cloud Synchronization (HP A, HP B, Laptops)
+  useEffect(() => {
+    // 1. Subscribe to Cloud Attendance in real time
+    const unsubscribeAttendance = subscribeToCloudAttendance((records) => {
+      if (records && records.length > 0) {
+        setAttendanceRecords(records);
+      }
+    });
+
+    // 2. Subscribe to Cloud Students in real time
+    const unsubscribeStudents = subscribeToCloudStudents((studentsList) => {
+      if (studentsList && studentsList.length > 0) {
+        setStudents(studentsList);
+      }
+    });
+
+    // 3. Subscribe to Cloud Settings in real time
+    const unsubscribeSettings = subscribeToCloudSettings((newSettings) => {
+      if (newSettings) {
+        setSettings(newSettings);
+      }
+    });
+
+    // 4. Seed Cloud if empty so any existing records on this device are pushed for others to see
+    syncLocalDataToCloudIfNeeded();
+
+    return () => {
+      unsubscribeAttendance();
+      unsubscribeStudents();
+      unsubscribeSettings();
+    };
+  }, []);
+
   // Save Students Handler
   const handleSaveStudents = useCallback((newStudents: Student[]) => {
     setStudents(newStudents);
     saveStudents(newStudents);
+    saveStudentsToCloud(newStudents);
   }, []);
 
   // Save Settings Handler
   const handleSaveSettings = useCallback((newSettings: SchoolSettings) => {
     setSettings(newSettings);
     saveSettings(newSettings);
+    saveSettingsToCloud(newSettings);
   }, []);
 
   // Refresh Attendance Records (Sync with Rekap Absensi)
@@ -272,6 +317,9 @@ export default function App() {
     saveStudents(restoredStudents);
     saveAttendance(restoredAttendance);
     saveSettings(restoredSettings);
+    saveAttendanceToCloud(restoredAttendance);
+    saveStudentsToCloud(restoredStudents);
+    saveSettingsToCloud(restoredSettings);
   };
 
   // Reset Attendance Only
@@ -279,7 +327,8 @@ export default function App() {
     if (window.confirm('Yakin ingin mereset seluruh riwayat absensi? Data siswa akan tetap aman.')) {
       setAttendanceRecords([]);
       saveAttendance([]);
-      alert('Seluruh riwayat absensi berhasil direset.');
+      clearAttendanceFromCloud();
+      alert('Seluruh riwayat absensi berhasil direset di perangkat dan cloud.');
     }
   };
 

@@ -70,8 +70,9 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-800 text-white text-xs py-1.5 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2 font-medium">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-900/60 text-emerald-100 border border-emerald-500/30">
-              PRESENSI TERPADU
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-900/60 text-emerald-100 border border-emerald-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              CLOUD SYNC MULTI-PERANGKAT AKTIF
             </span>
           </div>
           <div className="flex items-center space-x-3 text-emerald-100 font-mono text-[11px]">

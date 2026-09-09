@@ -5,6 +5,7 @@ import {
   sendAttendanceToGoogleSheets,
   getUniqueClasses,
 } from '../utils/storage';
+import { saveAttendanceToCloud } from '../lib/firebaseSync';
 import confetti from 'canvas-confetti';
 import {
   CheckCircle2,
@@ -206,7 +207,10 @@ export const InputAbsensiTab: React.FC<InputAbsensiTabProps> = ({
     upsertAttendanceBatch(recordsToSave);
     onAttendanceSaved();
 
-    // 2. Trigger Confetti celebration
+    // 2. Real-time Cloud Sync to Firebase Firestore (instantly visible on HP B, C, laptops)
+    saveAttendanceToCloud(recordsToSave);
+
+    // 3. Trigger Confetti celebration
     try {
       confetti({
         particleCount: 50,
@@ -215,8 +219,8 @@ export const InputAbsensiTab: React.FC<InputAbsensiTabProps> = ({
       });
     } catch (_) {}
 
-    // 3. Fast sync to Google Sheets if Webhook URL exists
-    let syncResultText = 'Data absensi tersimpan dengan aman di sistem!';
+    // 4. Fast sync to Google Sheets if Webhook URL exists
+    let syncResultText = 'Data absensi tersimpan & tersinkronisasi live ke seluruh HP/perangkat!';
     if (settings.googleWebhookUrl && settings.googleWebhookUrl.trim()) {
       const monthNames = [
         'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',

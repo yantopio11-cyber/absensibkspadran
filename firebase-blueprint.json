@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Presensi harian siswa sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "nibk": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "status": { "type": "string", "enum": ["H", "S", "I", "A"] },
+        "catatan": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["studentId", "tanggal", "status"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Data siswa SMP Negeri 2 Paciran",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nibk": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "jenisKelamin": { "type": "string" }
+      },
+      "required": ["id", "nama", "kelas"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Pengaturan sekolah dan sinkronisasi",
+      "type": "object",
+      "properties": {
+        "namaSekolah": { "type": "string" },
+        "googleWebhookUrl": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/attendance/{attendanceId}": {
+      "schema": "AttendanceRecord",
+      "description": "Koleksi rekapan absensi siswa multi-perangkat real-time"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Koleksi master data siswa"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Pengaturan bersama aplikasi"
+    }
+  }
+}
