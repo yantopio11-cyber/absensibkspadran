@@ -12,10 +12,13 @@ import { AttendanceRecord, Student, SchoolSettings } from '../types';
 import {
   loadAttendance,
   saveAttendance,
+  saveAttendanceSilent,
   loadStudents,
   saveStudents,
+  saveStudentsSilent,
   loadSettings,
   saveSettings,
+  saveSettingsSilent,
 } from '../utils/storage';
 
 // Helper to chunk arrays for Firestore batch limit (max 500 per batch)
@@ -119,7 +122,7 @@ export function subscribeToCloudAttendance(
         });
 
         // Always save to localStorage as backup cache
-        saveAttendance(records);
+        saveAttendanceSilent(records);
         onUpdate(records);
       },
       (error) => {
@@ -198,7 +201,7 @@ export function subscribeToCloudStudents(
         });
 
         if (students.length > 0) {
-          saveStudents(students);
+          saveStudentsSilent(students);
           onUpdate(students);
         }
       },
@@ -252,7 +255,7 @@ export function subscribeToCloudSettings(
             ...loadSettings(),
             ...data,
           };
-          saveSettings(merged);
+          saveSettingsSilent(merged);
           onUpdate(merged);
         }
       },

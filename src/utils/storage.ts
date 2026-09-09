@@ -118,6 +118,14 @@ export function saveStudents(students: Student[]): void {
   }
 }
 
+export function saveStudentsSilent(students: Student[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_STUDENTS, JSON.stringify(students));
+  } catch (err) {
+    console.error('Error saving students silently:', err);
+  }
+}
+
 // --- Attendance Storage ---
 export function loadAttendance(): AttendanceRecord[] {
   try {
@@ -136,6 +144,14 @@ export function saveAttendance(records: AttendanceRecord[]): void {
     window.dispatchEvent(new Event('attendance_updated'));
   } catch (err) {
     console.error('Error saving attendance:', err);
+  }
+}
+
+export function saveAttendanceSilent(records: AttendanceRecord[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_ATTENDANCE, JSON.stringify(records));
+  } catch (err) {
+    console.error('Error saving attendance silently:', err);
   }
 }
 
@@ -192,6 +208,14 @@ export function saveSettings(settings: SchoolSettings): void {
     window.dispatchEvent(new Event('settings_updated'));
   } catch (err) {
     console.error('Error saving settings:', err);
+  }
+}
+
+export function saveSettingsSilent(settings: SchoolSettings): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+  } catch (err) {
+    console.error('Error saving settings silently:', err);
   }
 }
 

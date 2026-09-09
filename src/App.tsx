@@ -199,25 +199,13 @@ export default function App() {
     runInitialSync();
   }, [handleSyncRemoteSettings]);
 
-  // Periodic background check & on-focus check for remote settings updates
+  // Background check for remote settings: only periodically every 5 minutes if needed, avoiding aggressive polling on focus
   useEffect(() => {
-    const onFocus = () => {
-      handleSyncRemoteSettings(false);
-    };
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        handleSyncRemoteSettings(false);
-      }
-    });
-
-    // Periodic check every 60 seconds
     const interval = setInterval(() => {
       handleSyncRemoteSettings(false);
-    }, 60000);
+    }, 300000);
 
     return () => {
-      window.removeEventListener('focus', onFocus);
       clearInterval(interval);
     };
   }, [handleSyncRemoteSettings]);
@@ -249,7 +237,7 @@ export default function App() {
   useEffect(() => {
     // 1. Subscribe to Cloud Attendance in real time
     const unsubscribeAttendance = subscribeToCloudAttendance((records) => {
-      if (records && records.length > 0) {
+      if (records) {
         setAttendanceRecords(records);
       }
     });
@@ -402,9 +390,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content Area */}
+      {/* Main Content Area - Instant Zero-Lag Tab Switching */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-8">
-        {activeTab === 'kelola_kelas' && (
+        <div className={activeTab === 'kelola_kelas' ? 'block' : 'hidden'}>
           <KelolaKelasTab
             students={students}
             onSaveStudents={handleSaveStudents}
@@ -413,9 +401,9 @@ export default function App() {
             onSyncGoogleSheet={handleSyncGoogleSheet}
             isSyncingSheet={isSyncingSheet}
           />
-        )}
+        </div>
 
-        {activeTab === 'input_absensi' && (
+        <div className={activeTab === 'input_absensi' ? 'block' : 'hidden'}>
           <InputAbsensiTab
             students={students}
             attendanceRecords={attendanceRecords}
@@ -423,17 +411,17 @@ export default function App() {
             settings={settings}
             defaultClass={targetClassForInput}
           />
-        )}
+        </div>
 
-        {activeTab === 'rekap_absensi' && (
+        <div className={activeTab === 'rekap_absensi' ? 'block' : 'hidden'}>
           <RekapAbsensiTab
             students={students}
             attendanceRecords={attendanceRecords}
             settings={settings}
           />
-        )}
+        </div>
 
-        {activeTab === 'pengaturan' && (
+        <div className={activeTab === 'pengaturan' ? 'block' : 'hidden'}>
           <PengaturanTab
             settings={settings}
             onSaveSettings={handleSaveSettings}
@@ -446,7 +434,7 @@ export default function App() {
             onSyncRemoteSettings={handleSyncRemoteSettings}
             isSyncingSheet={isSyncingSheet}
           />
-        )}
+        </div>
 
         {/* DUPLICATE TAB MENU KELOLA KELAS, INPUT ABSENSI, REKAP ABSENSI KE BAWAH KONTEN */}
         <BottomNav
